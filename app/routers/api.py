@@ -1,5 +1,8 @@
 from typing import Annotated
 
+from fastapi import APIRouter, Depends, Response, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.schemas.auth import (
     AccessTokenPayload,
     LoginRequest,
@@ -30,15 +33,13 @@ from app.services.user import (
     verify_password,
 )
 from app.utils.context import user_id_ctx
-from app.utils.database import get_auth_db
+from app.utils.db import get_auth_db
 from app.utils.log import logger
-from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
 
-@router.post("/register", response_model=LoginResponse)
+@router.post("/register")
 async def api_register(
     body: RegisterRequest,
     db_session: Annotated[AsyncSession, Depends(get_auth_db)],
@@ -61,7 +62,7 @@ async def api_register(
     return LoginResponse(**tokens)
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login")
 async def api_login(
     body: LoginRequest,
     db_session: Annotated[AsyncSession, Depends(get_auth_db)],
@@ -88,7 +89,7 @@ async def api_login(
     return LoginResponse(**tokens)
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get("/me")
 async def api_me(
     db_session: Annotated[AsyncSession, Depends(get_auth_db)],
     payload: Annotated[AccessTokenPayload, Depends(authenticate_access_token)],
@@ -110,9 +111,7 @@ async def api_update_username(
     await update_username(db_session, payload.sub, body.username)
 
 
-@router.post(
-    "/me/email", status_code=status.HTTP_202_ACCEPTED, response_model=LoginResponse
-)
+@router.post("/me/email", status_code=status.HTTP_202_ACCEPTED)
 async def api_update_email(
     body: UpdateEmailRequest,
     db_session: Annotated[AsyncSession, Depends(get_auth_db)],
@@ -131,9 +130,7 @@ async def api_update_email(
     return LoginResponse(**tokens)
 
 
-@router.post(
-    "/me/password", status_code=status.HTTP_202_ACCEPTED, response_model=LoginResponse
-)
+@router.post("/me/password", status_code=status.HTTP_202_ACCEPTED)
 async def api_update_password(
     body: UpdatePasswordRequest,
     db_session: Annotated[AsyncSession, Depends(get_auth_db)],
@@ -152,7 +149,7 @@ async def api_update_password(
     return LoginResponse(**tokens)
 
 
-@router.post("/refresh", response_model=LoginResponse)
+@router.post("/refresh")
 async def api_refresh(
     db_session: Annotated[AsyncSession, Depends(get_auth_db)],
     payload: Annotated[RefreshTokenPayload, Depends(authenticate_refresh_token)],
@@ -178,7 +175,7 @@ async def api_logout(
     await revoke_refresh_token(db_session, payload.jti, payload.sub)
 
 
-@router.post("/verify_access_token", response_model=AccessTokenPayload)
+@router.post("/verify_access_token")
 async def api_verify_access_token(
     payload: Annotated[AccessTokenPayload, Depends(authenticate_access_token)],
 ) -> AccessTokenPayload:

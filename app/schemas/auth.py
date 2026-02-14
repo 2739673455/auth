@@ -2,17 +2,17 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class AccessTokenPayload(BaseModel):
-    sub: int
-    exp: float
-    scope: list[str]
-    typ: str
+    sub: int = Field(..., description="用户ID")
+    exp: float = Field(..., description="过期时间戳")
+    scope: list[str] = Field(..., description="权限列表")
+    typ: str = Field(..., description="令牌类型")
 
 
 class RefreshTokenPayload(BaseModel):
-    sub: int
-    exp: float
-    jti: str
-    typ: str
+    sub: int = Field(..., description="用户ID")
+    exp: float = Field(..., description="过期时间戳")
+    jti: str = Field(..., description="令牌唯一标识")
+    typ: str = Field(..., description="令牌类型")
 
 
 class RegisterRequest(BaseModel):
@@ -76,12 +76,12 @@ class UpdatePasswordRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    username: str
-    email: str
-    groups: list[str]
+    username: str = Field(..., description="用户名")
+    email: str = Field(..., description="邮箱")
+    groups: list[str] = Field(..., description="用户组")
 
 
 class LoginResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str
+    access_token: str = Field(..., description="访问令牌")
+    refresh_token: str = Field(..., description="刷新令牌")
+    token_type: str = Field(..., description="令牌类型")

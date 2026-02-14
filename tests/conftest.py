@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.config import CFG
 from app.main import app
-from app.utils import database
+from app.utils import db
 
 TEST_DB_NAME = f"test_{CFG.db.database}"  # 测试数据库
 
@@ -116,21 +116,21 @@ async def setup_test_database():
 async def override_get_db() -> AsyncGenerator[None, None]:
     """覆盖数据库依赖以使用测试数据库"""
     # 清除数据库引擎缓存
-    await database.close_all()
+    await db.close_all()
     # 为测试数据库创建依赖
-    test_get_auth_db = database.get_db(
+    test_get_auth_db = db.get_db(
         "test_auth",
         f"mysql+asyncmy://{CFG.db.user}:{CFG.db.password}@{CFG.db.host}:{CFG.db.port}/{TEST_DB_NAME}",
     )
     # 使用 FastAPI 的 dependency_overrides 覆盖依赖
-    app.dependency_overrides[database.get_auth_db] = test_get_auth_db
+    app.dependency_overrides[db.get_auth_db] = test_get_auth_db
 
     yield
 
     # 清理依赖覆盖
     app.dependency_overrides.clear()
     # 清理数据库引擎缓存
-    await database.close_all()
+    await db.close_all()
 
 
 @pytest_asyncio.fixture

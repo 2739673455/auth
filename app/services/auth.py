@@ -5,6 +5,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import jwt
+from fastapi import Cookie, Depends, Header
+from pydantic import ValidationError
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import CFG
 from app.entities.auth import RefreshToken
 from app.exceptions.auth import (
@@ -15,11 +20,7 @@ from app.exceptions.auth import (
 )
 from app.schemas.auth import AccessTokenPayload, RefreshTokenPayload
 from app.utils.context import user_id_ctx
-from app.utils.database import get_auth_db
-from fastapi import Cookie, Depends, Header
-from pydantic import ValidationError
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.utils.db import get_auth_db
 
 BEIJING_TZ = timezone(timedelta(hours=8))  # 北京时间时区（UTC+8）
 

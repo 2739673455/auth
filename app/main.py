@@ -1,13 +1,14 @@
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.config import CFG
 from app.handlers import register_exception_handlers
 from app.middlewares import trace
 from app.routers import api
-from app.utils import database
+from app.utils import db
 from app.utils.log import setup_logger
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 
 # 生命周期管理
@@ -15,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 async def lifespan(app: FastAPI):
     setup_logger()  # 初始化日志
     yield
-    await database.close_all()  # 关闭数据库引擎
+    await db.close_all()  # 关闭数据库引擎
 
 
 app = FastAPI(lifespan=lifespan)

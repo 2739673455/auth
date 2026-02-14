@@ -1,7 +1,8 @@
 from typing import AsyncGenerator
 
-from app.config import CFG
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.config import CFG
 
 ENGINES = {}  # 存储数据库引擎的字典，键为数据库名称
 SESSION_MAKERS = {}  # 存储会话工厂的字典，键为数据库名称

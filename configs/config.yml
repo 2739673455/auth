@@ -14,7 +14,7 @@ log: # 日志
   max_file_size: 10MB # 单个日志文件最大大小
 
 auth: # 认证配置
-  secret_key: ${oc.env:AUTH_SECRET_KEY} # 私钥
+  secret_key: ${oc.env:AUTH_SECRET_KEY} # 令牌加密密钥
   algorithm: HS256 # 加密算法
   access_token_expire_minutes: 60 # 访问令牌过期时间（分钟）
   refresh_token_expire_days: 7 # 刷新令牌过期时间（天）
