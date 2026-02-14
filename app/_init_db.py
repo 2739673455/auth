@@ -127,6 +127,6 @@ my_init = MyInit(
 )
 sql_dir = Path(__file__).parent.parent / "sql"  # 数据库文件目录
 sql_files = list(sql_dir.glob("*.sql"))  # 获取所有SQL文件
-orm_dir = Path(__file__).parent.parent / "entities"  # 表模型输出目录
+orm_dir = Path(__file__).parent / "entities"  # 表模型输出目录
 db_sql_orm = [(f.stem, f, orm_dir / f"{f.stem}.py") for f in sql_files]
 asyncio.run(my_init.init_db(db_sql_orm))
