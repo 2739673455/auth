@@ -2,6 +2,8 @@ import time
 import uuid
 from typing import Callable
 
+from fastapi import Request, Response
+
 from app.utils.context import (
     client_ip_ctx,
     method_ctx,
@@ -12,7 +14,6 @@ from app.utils.context import (
     trace_id_ctx,
 )
 from app.utils.log import logger
-from fastapi import Request, Response
 
 
 def _get_client_ip(request: Request) -> str:
@@ -53,7 +54,6 @@ async def middleware(request: Request, call_next: Callable) -> Response:
         )  # 设置 response_time_ms 到 ContextVar
         if error:
             status_ctx.set("fail")  # 设置 status 到 ContextVar
-            logger.info(f"Request failed - {error}")
         else:
             status_ctx.set("finish")  # 设置 status 到 ContextVar
             logger.info("Request completed")

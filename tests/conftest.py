@@ -1,148 +1,120 @@
-import asyncio
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import logging
-from typing import AsyncGenerator, Generator
+from typing import AsyncGenerator
+from unittest.mock import AsyncMock, patch
 
 import asyncmy
 import pytest
 import pytest_asyncio
-from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
-from app.config import CFG
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from app._init_db import MyInit, SQLiteInit
+from app.config import CFG, MySQLCfg, SQLiteCfg
 from app.main import app
 from app.utils import db
 
-TEST_DB_NAME = f"test_{CFG.db.database}"  # 测试数据库
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger(__name__)
+class MySQLMock:
+    def __init__(self, config: MySQLCfg):
+        self.config = config
+        self.conn_conf = {
+            "host": config.host,
+            "port": config.port,
+            "user": config.user,
+            "password": config.password,
+        }
+        self.db_name = f"test_{config.database}"
+        self.db_url = f"mysql+asyncmy://{self.config.user}:{self.config.password}@{self.config.host}:{self.config.port}/{self.db_name}"
 
+    async def init(self):
+        """初始化数据"""
+        db_init = MyInit(self.config)
+        # 项目根目录
+        root_dir = Path(__file__).parent.parent
+        # SQL 文件
+        sql_file = root_dir / "sql" / DB_DRIVER / "auth.sql"
+        # 表模型输出路径
+        output_path = root_dir / "app" / "entities" / f"{sql_file.stem}.py"
+        # db_name, sql_file_path, output_path
+        db_sql_orm = [(self.db_name, sql_file, output_path)]
+        await db_init.init_db(db_sql_orm)
 
-async def create_test_database(conn_conf: dict, db_name: str):
-    """创建测试数据库"""
-    conn = await asyncmy.connect(**conn_conf)
-    try:
-        await conn.begin()
-        async with conn.cursor() as cur:
-            try:
-                await cur.execute(f"DROP DATABASE IF EXISTS {db_name}")
-            except Exception:
-                pass
-            await cur.execute(f"CREATE DATABASE {db_name} CHARACTER SET utf8mb4")
-        await conn.commit()
-    except Exception as e:
-        await conn.rollback()
-        logger.exception(f"Error creating database: {e}")
-        raise
-    finally:
-        conn.close()
-
-
-async def insert_data_into_test_db(conn_conf: dict, db_name: str, sql_file_path: Path):
-    """向测试数据库插入测试数据"""
-    conn = await asyncmy.connect(**conn_conf, db=db_name)
-    try:
-        with open(sql_file_path, "r", encoding="utf-8") as f:
-            sql = f.read()
-        await conn.begin()
-        async with conn.cursor() as cur:
-            await cur.execute(sql)
-        await conn.commit()
-    except Exception as e:
-        await conn.rollback()
-        logger.exception(f"{sql_file_path.stem} 执行sql失败: {e}")
-    finally:
-        conn.close()
+    async def clean(self):
+        """清理数据"""
+        conn = await asyncmy.connect(**self.conn_conf)
+        try:
+            async with conn.cursor() as cur:
+                await cur.execute(f"DROP DATABASE IF EXISTS {self.db_name}")
+        finally:
+            conn.close()
 
 
-async def clear_test_database(conn_conf: dict, db_name: str):
-    """清理测试数据库"""
-    conn = await asyncmy.connect(**conn_conf)
-    try:
-        await conn.begin()
-        async with conn.cursor() as cur:
-            await cur.execute(f"DROP DATABASE IF EXISTS {db_name}")
-        await conn.commit()
-    finally:
-        conn.close()
+class SQLiteMock:
+    def __init__(self, config: SQLiteCfg):
+        path = Path(config.database).parent
+        db_name = Path(config.database).name
+        self.config = config
+        self.database = path / f"test_{db_name}"
+        self.db_url = f"sqlite+aiosqlite:///{self.database}"
+
+    async def init(self):
+        """初始化数据"""
+        db_init = SQLiteInit(self.config)
+        # 项目根目录
+        root_dir = Path(__file__).parent.parent
+        # SQL 文件
+        sql_file = root_dir / "sql" / DB_DRIVER / "auth.sql"
+        # 表模型输出路径
+        output_path = root_dir / "app" / "entities" / f"{sql_file.stem}.py"
+        # db_name, sql_file_path, output_path
+        db_sql_orm = [(self.database.stem, sql_file, output_path)]
+        await db_init.init_db(db_sql_orm)
+
+    async def clean(self):
+        """清理数据"""
+        if self.database.exists():
+            self.database.unlink()
 
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """创建事件循环"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
+# 测试数据库配置
+DB_DRIVER = CFG.db.driver
+DB_CONFIG = CFG.db.configs[DB_DRIVER]
+if isinstance(DB_CONFIG, MySQLCfg):
+    db_mock = MySQLMock(DB_CONFIG)
+elif isinstance(DB_CONFIG, SQLiteCfg):
+    db_mock = SQLiteMock(DB_CONFIG)
+else:
+    raise ValueError(f"不支持的数据库驱动: {DB_DRIVER}")
 
 
 @pytest.fixture(scope="session", autouse=True)
 async def setup_test_database():
     """创建测试数据库并初始化表结构"""
-    conn_conf = {
-        "host": CFG.db.host,
-        "port": CFG.db.port,
-        "user": CFG.db.user,
-        "password": CFG.db.password,
-    }
-
-    # 先清理测试数据库
-    await clear_test_database(conn_conf, TEST_DB_NAME)
-    # 创建测试数据库
-    await create_test_database(conn_conf, TEST_DB_NAME)
-
-    # 初始化表结构
-    sql_file_path = Path(__file__).parent.parent / "app" / "sql" / "auth.sql"
-    if sql_file_path.exists():
-        await insert_data_into_test_db(conn_conf, TEST_DB_NAME, sql_file_path)
-
+    await db_mock.init()
     yield
-
-    # 清理测试数据库
-    await clear_test_database(conn_conf, TEST_DB_NAME)
+    await db_mock.clean()
 
 
 @pytest_asyncio.fixture
 async def override_get_db() -> AsyncGenerator[None, None]:
     """覆盖数据库依赖以使用测试数据库"""
-    # 清除数据库引擎缓存
     await db.close_all()
-    # 为测试数据库创建依赖
-    test_get_auth_db = db.get_db(
-        "test_auth",
-        f"mysql+asyncmy://{CFG.db.user}:{CFG.db.password}@{CFG.db.host}:{CFG.db.port}/{TEST_DB_NAME}",
-    )
-    # 使用 FastAPI 的 dependency_overrides 覆盖依赖
+    test_get_auth_db = db.get_db("test_auth", db_mock.db_url, DB_DRIVER)
     app.dependency_overrides[db.get_auth_db] = test_get_auth_db
 
     yield
 
-    # 清理依赖覆盖
     app.dependency_overrides.clear()
-    # 清理数据库引擎缓存
     await db.close_all()
 
 
 @pytest_asyncio.fixture
 async def async_test_client(override_get_db) -> AsyncGenerator[AsyncClient, None]:
     """创建异步测试客户端"""
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
-        yield ac
-
-
-@pytest.fixture
-def sync_test_client() -> TestClient:
-    """创建同步测试客户端"""
-    return TestClient(app)
+    with patch("app.services.email.send_verification_code", new_callable=AsyncMock):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as ac:
+            yield ac

@@ -1,24 +1,21 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
-class AccessTokenPayload(BaseModel):
-    sub: int = Field(..., description="用户ID")
-    exp: float = Field(..., description="过期时间戳")
-    scope: list[str] = Field(..., description="权限列表")
-    typ: str = Field(..., description="令牌类型")
-
-
-class RefreshTokenPayload(BaseModel):
-    sub: int = Field(..., description="用户ID")
-    exp: float = Field(..., description="过期时间戳")
-    jti: str = Field(..., description="令牌唯一标识")
-    typ: str = Field(..., description="令牌类型")
-
-
 class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., description="邮箱")
+    code: str = Field(..., description="邮箱验证码")
     username: str = Field(..., description="用户名")
     password: str = Field(..., description="密码")
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) != 6:
+            raise ValueError("验证码为6位数字")
+        if not v.isdigit():
+            raise ValueError("验证码只能包含数字")
+        return v
 
     @field_validator("username")
     @classmethod
@@ -60,10 +57,32 @@ class UpdateUsernameRequest(BaseModel):
 
 class UpdateEmailRequest(BaseModel):
     email: EmailStr = Field(..., description="新邮箱")
+    code: str = Field(..., description="邮箱验证码")
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) != 6:
+            raise ValueError("验证码为6位数字")
+        if not v.isdigit():
+            raise ValueError("验证码只能包含数字")
+        return v
 
 
 class UpdatePasswordRequest(BaseModel):
     password: str = Field(..., description="新密码")
+    code: str = Field(..., description="邮箱验证码")
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) != 6:
+            raise ValueError("验证码为6位数字")
+        if not v.isdigit():
+            raise ValueError("验证码只能包含数字")
+        return v
 
     @field_validator("password")
     @classmethod
@@ -85,3 +104,20 @@ class LoginResponse(BaseModel):
     access_token: str = Field(..., description="访问令牌")
     refresh_token: str = Field(..., description="刷新令牌")
     token_type: str = Field(..., description="令牌类型")
+
+
+class SendCodeRequest(BaseModel):
+    email: EmailStr = Field(..., description="邮箱")
+    type: str = Field(
+        default="register",
+        description="验证码类型：register-注册, reset_email-重置邮箱, reset_password-重置密码",
+    )
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        if v not in ("register", "reset_email", "reset_password"):
+            raise ValueError(
+                "Email code 类型只能为 register/reset_email/reset_password"
+            )
+        return v

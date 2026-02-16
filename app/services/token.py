@@ -1,34 +1,25 @@
-"""用户认证"""
+"""令牌认证"""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Annotated
 
 import jwt
 from fastapi import Cookie, Depends, Header
 from pydantic import ValidationError
-from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import CFG
-from app.entities.auth import RefreshToken
-from app.exceptions.auth import (
-    ExpiredAccessTokenError,
-    ExpiredRefreshTokenError,
-    InvalidAccessTokenError,
-    InvalidRefreshTokenError,
-)
-from app.schemas.auth import AccessTokenPayload, RefreshTokenPayload
-from app.utils.context import user_id_ctx
-from app.utils.db import get_auth_db
-
-BEIJING_TZ = timezone(timedelta(hours=8))  # 北京时间时区（UTC+8）
+from app.exceptions import auth as auth_error
+from app.repositories import token as token_repo
+from app.schemas import token as token_schema
+from app.utils import context, db
 
 
 def _generate_refresh_token(user_id: int) -> tuple:
     """生成刷新令牌"""
     jti = str(uuid.uuid4())  # JWT ID
-    expire = datetime.now(BEIJING_TZ) + timedelta(
+    expire = datetime.now() + timedelta(
         days=CFG.auth.refresh_token_expire_days
     )  # 刷新令牌过期时间
     payload = {
@@ -43,7 +34,7 @@ def _generate_refresh_token(user_id: int) -> tuple:
 
 def _generate_access_token(user_id: int, scopes: list[str]) -> str:
     """生成访问令牌"""
-    expire = datetime.now(BEIJING_TZ) + timedelta(
+    expire = datetime.now() + timedelta(
         minutes=CFG.auth.access_token_expire_minutes
     )  # 访问令牌过期时间
     payload = {
@@ -64,13 +55,7 @@ async def create_token(
     jti, expire, r_token = _generate_refresh_token(user_id)
 
     # 存储刷新令牌
-    try:
-        refresh_token = RefreshToken(jti=jti, user_id=user_id, expires_at=expire)
-        db_session.add(refresh_token)
-        await db_session.commit()
-    except Exception:
-        await db_session.rollback()
-        raise
+    await token_repo.create(db_session, jti, user_id, expire)
 
     # 生成访问令牌
     a_token = _generate_access_token(user_id, scopes)
@@ -85,40 +70,13 @@ async def create_token(
 async def revoke_refresh_token(
     db_session: AsyncSession, jti: str, user_id: int
 ) -> None:
-    """在数据库中撤销刷新令牌"""
-    try:
-        stmt = (
-            update(RefreshToken)
-            .where(
-                RefreshToken.jti == jti,
-                RefreshToken.user_id == user_id,
-                RefreshToken.yn == 1,
-            )
-            .values(yn=0)
-        )
-        await db_session.execute(stmt)
-        await db_session.commit()
-    except Exception:
-        await db_session.rollback()
-        raise
+    """撤销刷新令牌"""
+    await token_repo.revoke(db_session, jti, user_id)
 
 
 async def revoke_all_refresh_tokens(db_session: AsyncSession, user_id: int) -> None:
     """撤销用户所有刷新令牌"""
-    try:
-        stmt = (
-            update(RefreshToken)
-            .where(
-                RefreshToken.user_id == user_id,
-                RefreshToken.yn == 1,
-            )
-            .values(yn=0)
-        )
-        await db_session.execute(stmt)
-        await db_session.commit()
-    except Exception:
-        await db_session.rollback()
-        raise
+    await token_repo.revoke_all(db_session, user_id)
 
 
 # --- 验证访问令牌 ---
@@ -129,33 +87,33 @@ def _get_access_token(
 ) -> str | None:
     """从请求头获取 Bearer token"""
     if authorization is None:
-        raise InvalidAccessTokenError  # 缺少访问令牌
+        raise auth_error.InvalidAccessTokenError  # 缺少访问令牌
     return authorization.replace("Bearer ", "")
 
 
 def _decode_access_token(
     access_token: Annotated[str, Depends(_get_access_token)],
-) -> AccessTokenPayload:
+) -> token_schema.AccessTokenPayload:
     """解析访问令牌"""
     try:
         payload = jwt.decode(access_token, CFG.auth.secret_key, [CFG.auth.algorithm])
         payload["scope"] = payload["scope"].split()
-        payload = AccessTokenPayload(**payload)
+        payload = token_schema.AccessTokenPayload(**payload)
         if payload.typ != "access":
-            raise InvalidAccessTokenError  # token 类型不正确
+            raise auth_error.InvalidAccessTokenError  # token 类型不正确
         return payload
     except jwt.ExpiredSignatureError:
-        raise ExpiredAccessTokenError  # 访问令牌过期
+        raise auth_error.ExpiredAccessTokenError  # 访问令牌过期
     except jwt.exceptions.InvalidTokenError or ValidationError:
-        raise InvalidAccessTokenError  # 访问令牌无效
+        raise auth_error.InvalidAccessTokenError  # 访问令牌无效
 
 
 async def authenticate_access_token(
-    payload: Annotated[AccessTokenPayload, Depends(_decode_access_token)],
-) -> AccessTokenPayload:
+    payload: Annotated[token_schema.AccessTokenPayload, Depends(_decode_access_token)],
+) -> token_schema.AccessTokenPayload:
     """验证访问令牌"""
     # 设置 user_id 到 ContextVar
-    user_id_ctx.set(str(payload.sub))
+    context.user_id_ctx.set(str(payload.sub))
     return payload
 
 
@@ -164,45 +122,43 @@ async def authenticate_access_token(
 
 def _decode_refresh_token(
     refresh_token: Annotated[str, Cookie()],  # 从 Cookie 获取 refresh_token
-) -> RefreshTokenPayload:
+) -> token_schema.RefreshTokenPayload:
     """解析刷新令牌"""
     try:
         payload = jwt.decode(refresh_token, CFG.auth.secret_key, [CFG.auth.algorithm])
-        payload = RefreshTokenPayload(**payload)
+        payload = token_schema.RefreshTokenPayload(**payload)
         if payload.typ != "refresh":
-            raise InvalidRefreshTokenError  # token 类型不正确
+            raise auth_error.InvalidRefreshTokenError  # token 类型不正确
         return payload
     except jwt.ExpiredSignatureError:
-        raise ExpiredRefreshTokenError  # 刷新令牌过期
+        raise auth_error.ExpiredRefreshTokenError  # 刷新令牌过期
     except jwt.exceptions.InvalidTokenError or ValidationError:
-        raise InvalidRefreshTokenError  # 刷新令牌无效
+        raise auth_error.InvalidRefreshTokenError  # 刷新令牌无效
 
 
 async def authenticate_refresh_token(
-    payload: Annotated[RefreshTokenPayload, Depends(_decode_refresh_token)],
-    db_session: Annotated[AsyncSession, Depends(get_auth_db)],
-) -> RefreshTokenPayload:
+    payload: Annotated[
+        token_schema.RefreshTokenPayload, Depends(_decode_refresh_token)
+    ],
+    db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
+) -> token_schema.RefreshTokenPayload:
     """验证刷新令牌"""
     # 设置 user_id 到 ContextVar
-    user_id_ctx.set(str(payload.sub))
+    context.user_id_ctx.set(str(payload.sub))
 
     # 验证刷新令牌是否在数据库中且未撤销
-    stmt = select(RefreshToken.yn, RefreshToken.expires_at).where(
-        RefreshToken.jti == payload.jti, RefreshToken.user_id == payload.sub
+    token_record = await token_repo.get_by_jti(
+        db_session, payload.jti, int(payload.sub)
     )
-    result = await db_session.execute(stmt)
-    token_record = result.first()
 
     if not token_record:  # 刷新令牌不存在
-        raise InvalidRefreshTokenError
+        raise auth_error.InvalidRefreshTokenError
 
     yn, expires_at = token_record
     if not yn:  # 刷新令牌已被撤销
-        raise InvalidRefreshTokenError
+        raise auth_error.InvalidRefreshTokenError
 
-    if expires_at.tzinfo is None:  # 确保有时区信息并检查是否过期
-        expires_at = expires_at.replace(tzinfo=BEIJING_TZ)
-    if datetime.now(BEIJING_TZ) > expires_at:
-        raise ExpiredRefreshTokenError  # 刷新令牌过期
+    if datetime.now() > expires_at:
+        raise auth_error.ExpiredRefreshTokenError  # 刷新令牌过期
 
     return payload

@@ -1,6 +1,9 @@
 import json
 import sys
+import traceback
 from pathlib import Path
+
+from loguru import logger
 
 from app.config import CFG, LogCfg
 from app.utils.context import (
@@ -13,10 +16,9 @@ from app.utils.context import (
     trace_id_ctx,
     user_id_ctx,
 )
-from loguru import logger
 
 LOGGER_CONFIGURED = False  # 日志是否已初始化
-LOG_DIR = Path(__file__).parent.parent / "logs"  # 日志文件目录
+LOG_DIR = Path(__file__).parent.parent.parent / "logs"  # 日志文件目录
 
 
 def _build_log_json(record):
@@ -38,6 +40,18 @@ def _build_log_json(record):
     # 将 extra 中的信息添加到输出
     extra = {k: v for k, v in record.get("extra", {}).items() if k != "json"}
     log_json.update(extra)
+
+    # 捕获异常信息（如果有），格式化为字符串
+    exc_info = record.get("exception")
+    if exc_info:
+        if exc_info.value is not None:
+            log_json["exception"] = "".join(
+                traceback.format_exception(
+                    exc_info.type, exc_info.value, exc_info.traceback
+                )
+            )
+        # 清除 exception，阻止 loguru 默认格式化
+        record["exception"] = None
 
     log_json = {k: v for k, v in log_json.items() if v}  # 滤空
     record["extra"]["json"] = json.dumps(log_json, ensure_ascii=False)

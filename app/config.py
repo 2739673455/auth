@@ -2,16 +2,33 @@ from pathlib import Path
 
 import dotenv
 from omegaconf import OmegaConf
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 # 数据库
-class DBCfg(BaseModel):
+class MySQLCfg(BaseModel):
     host: str
     port: int
     user: str
     password: str
     database: str
+
+
+class SQLiteCfg(BaseModel):
+    database: str
+
+    @field_validator("database")
+    @classmethod
+    def resolve_database(cls, v: str) -> str:
+        """将相对路径转换为项目根目录下的绝对路径"""
+        root_dir = Path(__file__).parent.parent
+        p = root_dir / v
+        return str(p.resolve())
+
+
+class DBCfg(BaseModel):
+    driver: str
+    configs: dict[str, MySQLCfg | SQLiteCfg]
 
 
 # 日志
@@ -32,10 +49,29 @@ class AuthCfg(BaseModel):
     refresh_token_expire_days: int
 
 
+# 管理员配置
+class AdminCfg(BaseModel):
+    email: str
+    username: str
+    password: str
+
+
+# 邮件配置
+class EmailCfg(BaseModel):
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_password: str
+    from_email: str
+    from_name: str = ""
+
+
 class Cfg(BaseModel):
     db: DBCfg
     log: LogCfg
     auth: AuthCfg
+    admin: AdminCfg
+    email: EmailCfg
     cors_origins: list[str]
 
 

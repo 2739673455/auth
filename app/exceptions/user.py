@@ -13,34 +13,45 @@ class EmailAlreadyExistsError(ConflictError):
     message = "邮箱已被注册"
 
 
-class UserNotFoundError(AppError):
+class EmailNotFoundError(AppError):
     code = 2002
+    message = "邮箱不存在"
+    status_code = 404
+
+
+class UserNotFoundError(AppError):
+    code = 2003
     message = "用户不存在"
     status_code = 401
 
 
 class UserDisabledError(AppError):
-    code = 2003
+    code = 2004
     message = "用户已被禁用"
     status_code = 403
 
 
 class InvalidCredentialsError(AppError):
-    code = 2004
+    code = 2005
     message = "密码错误"
     status_code = 401
 
 
 class UserNameSameError(BadRequestError):
-    code = 2005
+    code = 2006
     message = "用户名与原用户名相同"
 
 
 class UserEmailSameError(BadRequestError):
-    code = 2006
+    code = 2007
     message = "邮箱与原邮箱相同"
 
 
 class UserPasswordSameError(BadRequestError):
-    code = 2007
+    code = 2008
     message = "密码与原密码相同"
+
+
+class InvalidVerifyCodeError(BadRequestError):
+    code = 2009
+    message = "验证码错误或已过期"
