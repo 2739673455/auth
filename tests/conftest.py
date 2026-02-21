@@ -12,7 +12,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app._init_db import MyInit, SQLiteInit
 from app.config import CFG, MySQLCfg, SQLiteCfg
+from app.entities.auth import Group, Scope
 from app.main import app
+from app.repositories import group as group_repo
+from app.repositories import relation as relation_repo
+from app.repositories import scope as scope_repo
+from app.repositories import user as user_repo
 from app.utils import db
 
 
@@ -89,10 +94,57 @@ else:
     raise ValueError(f"不支持的数据库驱动: {DB_DRIVER}")
 
 
+async def _create_admin_user():
+    """创建测试用的admin用户"""
+    async for db_session in db.get_db("test_auth", db_mock.db_url, DB_DRIVER)():
+        # 检查是否存在权限为 *
+        all_scope = await scope_repo.get_by_name(db_session, "*")
+
+        # 如果不存在则创建管理员用户和管理员组，并赋予 * 权限
+        if not all_scope:
+            all_scope = Scope(name="*", description="全部权限")
+            db_session.add(all_scope)
+            await db_session.flush()
+
+        # 创建或覆盖组
+        admin_group = await group_repo.get_by_name_with_scope(db_session, "admin")
+        if not admin_group:
+            admin_group = Group(name="admin", scope=[all_scope])
+            db_session.add(admin_group)
+            await db_session.flush()
+        elif all_scope not in admin_group.scope:
+            admin_group.scope.append(all_scope)
+            await db_session.flush()
+
+        # 创建或更新用户
+        admin_user = await user_repo.get_by_email_with_group(
+            db_session, CFG.admin.email
+        )
+        if not admin_user:
+            admin_user = await user_repo.create(
+                db_session,
+                email=CFG.admin.email,
+                username=CFG.admin.username,
+                password=CFG.admin.password,
+            )
+            await relation_repo.add_user_group(
+                db_session, [(admin_user.id, admin_group.id)]
+            )
+        elif admin_group not in admin_user.group:
+            admin_user.name = CFG.admin.username
+            admin_user.password_hash = user_repo.passwd_hash.hash(CFG.admin.password)
+            await relation_repo.add_user_group(
+                db_session, [(admin_user.id, admin_group.id)]
+            )
+
+        await db_session.commit()
+
+
 @pytest.fixture(scope="session", autouse=True)
 async def setup_test_database():
     """创建测试数据库并初始化表结构"""
     await db_mock.init()
+    await _create_admin_user()
     yield
     await db_mock.clean()
 

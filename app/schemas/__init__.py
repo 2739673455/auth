@@ -1,1 +1,1 @@
-from . import token, user
+from . import admin, token, user

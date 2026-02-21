@@ -27,6 +27,12 @@ async def create_email_code(
 
 async def verify_email_code(db_session, email: str, code: str, code_type: str) -> None:
     """验证邮箱验证码"""
-    is_valid = await email_code_repo.verify(db_session, email, code, code_type)
-    if not is_valid:
+    # 获取最新有效验证码
+    email_code = await email_code_repo.get_latest(db_session, email, code_type)
+
+    # 验证码不存在、不匹配或已过期
+    if not email_code or email_code.code != code:
         raise user_error.InvalidVerifyCodeError
+
+    # 验证成功，作废该验证码及之前的所有验证码
+    await email_code_repo.revoke_all(db_session, email, code_type, email_code.create_at)

@@ -66,7 +66,7 @@ CREATE TABLE `email_code` (
     `type` VARCHAR(20) NOT NULL COMMENT '类型：register-注册, reset_email-重置邮箱, reset_password-重置密码',
     `expire_at` DATETIME NOT NULL COMMENT '过期时间',
     `used` TINYINT NOT NULL DEFAULT 0 COMMENT '是否已使用',
-    `create_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     INDEX idx_email_code_email (email),
     INDEX idx_email_code_expire_at (expire_at)
 ) COMMENT '邮箱验证码';

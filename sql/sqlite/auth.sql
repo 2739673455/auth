@@ -83,7 +83,7 @@ CREATE TABLE `email_code` (
     `type` VARCHAR(20) NOT NULL,  -- 类型：register-注册, reset_password-重置密码
     `expire_at` DATETIME NOT NULL,  -- 过期时间
     `used` INTEGER NOT NULL DEFAULT 0,  -- 是否已使用
-    `create_at` DATETIME DEFAULT CURRENT_TIMESTAMP  -- 创建时间
+    `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP  -- 创建时间
 );
 
 CREATE INDEX `idx_email_code_email` ON `email_code` (`email`);

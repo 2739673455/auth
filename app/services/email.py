@@ -9,7 +9,7 @@ import aiosmtplib
 from app.config import CFG
 
 
-async def send_email(
+async def _send_email(
     to_email: str,
     subject: str,
     content: str,
@@ -84,4 +84,4 @@ async def send_verification_code(to_email: str, code: str, code_type: str) -> No
     </html>
     """
 
-    return await send_email(to_email, subject, html_content, "html")
+    return await _send_email(to_email, subject, html_content, "html")

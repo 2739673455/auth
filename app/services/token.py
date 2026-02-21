@@ -67,18 +67,6 @@ async def create_token(
     }
 
 
-async def revoke_refresh_token(
-    db_session: AsyncSession, jti: str, user_id: int
-) -> None:
-    """撤销刷新令牌"""
-    await token_repo.revoke(db_session, jti, user_id)
-
-
-async def revoke_all_refresh_tokens(db_session: AsyncSession, user_id: int) -> None:
-    """撤销用户所有刷新令牌"""
-    await token_repo.revoke_all(db_session, user_id)
-
-
 # --- 验证访问令牌 ---
 
 

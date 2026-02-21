@@ -22,7 +22,7 @@ class EmailNotFoundError(AppError):
 class UserNotFoundError(AppError):
     code = 2003
     message = "用户不存在"
-    status_code = 401
+    status_code = 404
 
 
 class UserDisabledError(AppError):

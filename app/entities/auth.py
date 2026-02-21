@@ -21,7 +21,7 @@ class EmailCode(Base):
     type: Mapped[str] = mapped_column(String(20), nullable=False)
     expire_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     used: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('0'))
-    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+    create_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
 
 
 class Group(Base):

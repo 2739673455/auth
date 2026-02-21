@@ -21,6 +21,8 @@ class RegisterRequest(BaseModel):
     @classmethod
     def validate_username(cls, v: str) -> str:
         v = v.strip()
+        if "@" in v:
+            raise ValueError("用户名不能包含@字符")
         if len(v) < 1:
             raise ValueError("用户名不少于1个字符")
         if len(v) > 50:
@@ -48,6 +50,8 @@ class UpdateUsernameRequest(BaseModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
+        if "@" in v:
+            raise ValueError("用户名不能包含@字符")
         if len(v) < 1:
             raise ValueError("用户名不少于1个字符")
         if len(v) > 50:

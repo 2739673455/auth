@@ -191,7 +191,7 @@ class TestAuthAPIBasic:
         response = await async_test_client.post(
             "/api/login", json={"email": fake.email(), "password": fake.password()}
         )
-        assert response.status_code == 401
+        assert response.status_code == 404
 
     @pytest.mark.asyncio
     async def test_login_wrong_password(self, async_test_client):
