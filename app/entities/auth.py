@@ -21,7 +21,7 @@ class EmailCode(Base):
     type: Mapped[str] = mapped_column(String(20), nullable=False)
     expire_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     used: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('0'))
-    create_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
+    create_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, server_default=text("datetime('now', '+8 hours')"))
 
 
 class Group(Base):
@@ -30,7 +30,7 @@ class Group(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     yn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('1'))
-    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text("datetime('now', '+8 hours')"))
 
     scope: Mapped[list['Scope']] = relationship('Scope', secondary='group_scope_rel', back_populates='group')
     user: Mapped[list['User']] = relationship('User', secondary='group_user_rel', back_populates='group')
@@ -43,7 +43,7 @@ class Scope(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     yn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('1'))
     description: Mapped[Optional[str]] = mapped_column(String(100), server_default=text('NULL'))
-    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text("datetime('now', '+8 hours')"))
 
     group: Mapped[list['Group']] = relationship('Group', secondary='group_scope_rel', back_populates='scope')
 
@@ -56,8 +56,8 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(500), nullable=False)
     yn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('1'))
-    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
-    update_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text("datetime('now', '+8 hours')"))
+    update_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text("datetime('now', '+8 hours')"))
 
     group: Mapped[list['Group']] = relationship('Group', secondary='group_user_rel', back_populates='user')
     refresh_token: Mapped[list['RefreshToken']] = relationship('RefreshToken', back_populates='user')
@@ -87,6 +87,6 @@ class RefreshToken(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey('user.id'), nullable=False)
     expires_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     yn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text('1'))
-    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text("datetime('now', '+8 hours')"))
 
     user: Mapped['User'] = relationship('User', back_populates='refresh_token')
