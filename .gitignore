@@ -11,4 +11,3 @@ wheels/
 logs
 .pytest_cache
 *.db
-.node_modules
