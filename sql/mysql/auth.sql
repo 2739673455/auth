@@ -37,16 +37,16 @@ CREATE TABLE `group_scope_rel` (
     `group_id` INT NOT NULL COMMENT '组ID',
     `scope_id` INT NOT NULL COMMENT '权限范围ID',
     PRIMARY KEY (`group_id`, `scope_id`),
-    FOREIGN KEY (`group_id`) REFERENCES `group` (`id`),
-    FOREIGN KEY (`scope_id`) REFERENCES `scope` (`id`)
+    FOREIGN KEY (`group_id`) REFERENCES `group` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`scope_id`) REFERENCES `scope` (`id`) ON DELETE CASCADE
 ) COMMENT '组-权限关系';
 
 CREATE TABLE `group_user_rel` (
     `group_id` INT NOT NULL COMMENT '组ID',
     `user_id` BIGINT NOT NULL COMMENT '用户ID',
     PRIMARY KEY (`group_id`, `user_id`),
-    FOREIGN KEY (`group_id`) REFERENCES `group` (`id`),
-    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
+    FOREIGN KEY (`group_id`) REFERENCES `group` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
 ) COMMENT '组-用户关系';
 
 CREATE TABLE `refresh_token` (

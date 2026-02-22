@@ -50,8 +50,8 @@ CREATE TABLE `group_scope_rel` (
     `group_id` INTEGER NOT NULL,  -- 组ID
     `scope_id` INTEGER NOT NULL,  -- 权限范围ID
     PRIMARY KEY (`group_id`, `scope_id`),
-    FOREIGN KEY (`group_id`) REFERENCES `group` (`id`),
-    FOREIGN KEY (`scope_id`) REFERENCES `scope` (`id`)
+    FOREIGN KEY (`group_id`) REFERENCES `group` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`scope_id`) REFERENCES `scope` (`id`) ON DELETE CASCADE
 );
 
 -- 组-用户关系表
@@ -59,8 +59,8 @@ CREATE TABLE `group_user_rel` (
     `group_id` INTEGER NOT NULL,  -- 组ID
     `user_id` INTEGER NOT NULL,  -- 用户ID
     PRIMARY KEY (`group_id`, `user_id`),
-    FOREIGN KEY (`group_id`) REFERENCES `group` (`id`),
-    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
+    FOREIGN KEY (`group_id`) REFERENCES `group` (`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
 );
 
 -- 刷新令牌表
