@@ -28,7 +28,7 @@ class DBMock:
 
         self.db_init = db_init
         self.db_sql_orm = db_sql_orm
-        self.db_name = f"test_{db_name}"
+        self.db_name = db_name
         self.db_url = db_init.get_async_db_url(self.db_name)
 
     async def init(self):
@@ -101,14 +101,14 @@ async def setup_test_database():
 
     yield
 
-    await db_mock.clean()
+    # await db_mock.clean()
 
 
 @pytest_asyncio.fixture
 async def override_get_db() -> AsyncGenerator[None, None]:
     """覆盖数据库依赖以使用测试数据库"""
     await db.close_all()
-    test_get_auth_db = db.get_db("test_auth", db_mock.db_url, CFG.db.driver)
+    test_get_auth_db = db.get_db(db_mock.db_name, db_mock.db_url, CFG.db.driver)
     app.dependency_overrides[db.get_auth_db] = test_get_auth_db
 
     yield

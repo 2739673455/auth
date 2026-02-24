@@ -1,5 +1,5 @@
 db: # 认证数据库
-  driver: sqlite # 数据库驱动
+  driver: mysql # 数据库驱动
   configs:
     mysql:
       host: 127.0.0.1

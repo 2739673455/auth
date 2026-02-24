@@ -40,6 +40,10 @@ class DBInit:
         """获取异步数据库连接 url"""
         raise NotImplementedError
 
+    async def check_db_exists(self, db_name: str) -> bool:
+        """检查数据库是否存在"""
+        raise NotImplementedError
+
     async def gen_tb_model(self, output_path: Path, db_url: str):
         """生成 SQLAlchemy 表模型"""
         # 创建 SQLAlchemy 数据库引擎
@@ -54,10 +58,6 @@ class DBInit:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(code)
-
-    async def check_db_exists(self, db_name: str) -> bool:
-        """检查数据库是否存在"""
-        raise NotImplementedError
 
     async def init_db(self, db_sql_orm: list[tuple], max_workers: int = 5):
         """初始化数据库并导入数据"""
