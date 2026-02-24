@@ -1,26 +1,18 @@
 """初始化数据库"""
 
 import asyncio
-import logging
 import sys
 from pathlib import Path
 
 import aiosqlite
 import asyncmy
+from loguru import logger
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn
 from sqlacodegen.generators import DeclarativeGenerator
 from sqlalchemy import MetaData, create_engine
 
 from app.config import CFG, MySQLCfg, SQLiteCfg
-
-# 日志
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger(__name__)
 
 
 class DBInit:

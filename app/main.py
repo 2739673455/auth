@@ -43,6 +43,7 @@ async def create_admin_user():
         admin_email = CFG.admin.email
         admin_username = CFG.admin.username
         admin_password = CFG.admin.password
+
         async for db_session in db.get_auth_db():
             # 查找 * 权限
             all_scope = await scope_repo.get_by_name(db_session, "*")
