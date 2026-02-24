@@ -54,6 +54,10 @@ class DBInit:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(code)
 
+    async def check_db_exists(self, db_name: str) -> bool:
+        """检查数据库是否存在"""
+        raise NotImplementedError
+
     async def init_db(self, db_sql_orm: list[tuple], max_workers: int = 5):
         """初始化数据库并导入数据"""
         logger.info(f"开始初始化数据库 {[db_name for db_name, _, _ in db_sql_orm]}")
@@ -131,6 +135,24 @@ class MyInit(DBInit):
     async def get_db_url(self, db_name: str):
         self.db_url = f"mysql+pymysql://{self.config.user}:{self.config.password}@{self.config.host}:{self.config.port}/{db_name}"
 
+    async def check_db_exists(self, db_name: str) -> bool:
+        """检查 MySQL 数据库是否存在"""
+        try:
+            conn = await asyncmy.connect(**self.conn_conf)
+            try:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = %s",
+                        (db_name,),
+                    )
+                    result = await cur.fetchone()
+                    return result is not None
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"检查数据库存在性失败: {e}")
+            return False
+
 
 class SQLiteInit(DBInit):
     """SQLite 数据库初始化"""
@@ -161,24 +183,26 @@ class SQLiteInit(DBInit):
         """获取 SQLAlchemy 连接 URL"""
         self.db_url = f"sqlite:///{self.db_path_dir / f'{db_name}.db'}"
 
+    async def check_db_exists(self, db_name: str) -> bool:
+        """检查 SQLite 数据库文件是否存在"""
+        db_path = self.db_path_dir / f"{db_name}.db"
+        return db_path.exists()
 
-async def run():
+
+async def run(db_driver, db_config):
     """执行数据库初始化"""
-    DB_DRIVER = CFG.db.driver
-    DB_CONFIG = CFG.db.configs[DB_DRIVER]
-
-    if isinstance(DB_CONFIG, MySQLCfg):
+    if isinstance(db_config, MySQLCfg):
         # 配置数据库连接
-        db_init = MyInit(DB_CONFIG)
-    elif isinstance(DB_CONFIG, SQLiteCfg):
+        db_init = MyInit(db_config)
+    elif isinstance(db_config, SQLiteCfg):
         # 配置数据库路径
-        db_init = SQLiteInit(DB_CONFIG)
+        db_init = SQLiteInit(db_config)
     else:
-        logger.error(f"不支持的数据库驱动: {DB_DRIVER}")
+        logger.error(f"不支持的数据库驱动: {db_driver}")
         sys.exit(1)
 
     # SQL 文件目录
-    sql_dir = Path(__file__).parent.parent / "sql" / DB_DRIVER
+    sql_dir = Path(__file__).parent.parent / "sql" / db_driver
     # 获取所有 SQL 文件
     sql_files = list(sql_dir.glob("*.sql"))
     # 表模型输出目录
@@ -194,4 +218,6 @@ async def run():
 
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    db_driver = CFG.db.driver
+    db_config = CFG.db.configs[db_driver]
+    asyncio.run(run(db_driver, db_config))

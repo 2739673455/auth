@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import sqlalchemy.exc
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import CFG
+from app.config import CFG, MySQLCfg, SQLiteCfg
 from app.entities.auth import Group, Scope
 from app.exceptions.handlers import register_exception_handlers
+from app.init_db import MyInit, SQLiteInit
 from app.middlewares import trace
 from app.repositories import group as group_repo
 from app.repositories import relation as relation_repo
@@ -15,6 +17,43 @@ from app.repositories import user as user_repo
 from app.routers import api
 from app.utils import db
 from app.utils.log import logger, setup_logger
+
+
+async def init_database_if_needed():
+    """如果数据库不存在则自动初始化"""
+    DB_DRIVER = CFG.db.driver
+    DB_CONFIG = CFG.db.configs[DB_DRIVER]
+
+    # 根据数据库类型创建对应的初始化器
+    if isinstance(DB_CONFIG, MySQLCfg):
+        db_init = MyInit(DB_CONFIG)
+    elif isinstance(DB_CONFIG, SQLiteCfg):
+        db_init = SQLiteInit(DB_CONFIG)
+    else:
+        logger.error(f"不支持的数据库驱动: {DB_DRIVER}")
+        return
+
+    # SQL 文件目录
+    sql_dir = Path(__file__).parent.parent / "sql" / DB_DRIVER
+    # 获取所有 SQL 文件
+    sql_files = list(sql_dir.glob("*.sql"))
+    # 表模型输出目录
+    orm_dir = Path(__file__).parent / "entities"
+
+    # 检查每个数据库是否存在，不存在则初始化
+    need_init = []
+    for f in sql_files:
+        db_name = f.stem
+        exists = await db_init.check_db_exists(db_name)
+        if not exists:
+            need_init.append((db_name, f, orm_dir / f"{f.stem}.py"))
+            logger.info(f"数据库 {db_name} 不存在，将自动初始化")
+        else:
+            logger.debug(f"数据库 {db_name} 已存在，跳过初始化")
+
+    if need_init:
+        await db_init.init_db(need_init)
+        logger.info("数据库自动初始化完成")
 
 
 async def create_admin_user():
@@ -81,6 +120,9 @@ async def create_admin_user():
 async def lifespan(app: FastAPI):
     # 初始化日志
     setup_logger()
+
+    # 检查并初始化数据库（如果不存在）
+    await init_database_if_needed()
 
     # 创建管理员用户
     await create_admin_user()
