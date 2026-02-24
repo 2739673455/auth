@@ -17,7 +17,12 @@ from . import config
 
 class DBInit:
     def __init__(self, cfg):
+        self.config = None
         self.db_url = ""
+
+    async def delete_db(self, db_name: str):
+        """删除数据库"""
+        raise NotImplementedError
 
     async def create_db(self, db_name: str):
         """创建数据库"""
@@ -27,8 +32,12 @@ class DBInit:
         """执行 SQL 文件"""
         raise NotImplementedError
 
-    def get_db_url(self, db_name: str):
-        """获取数据库连接 url"""
+    def get_sync_db_url(self, db_name: str):
+        """获取同步数据库连接 url"""
+        raise NotImplementedError
+
+    def get_async_db_url(self, db_name: str):
+        """获取异步数据库连接 url"""
         raise NotImplementedError
 
     async def gen_tb_model(self, output_path: Path, db_url: str):
@@ -68,9 +77,10 @@ class DBInit:
                 """处理单个数据库的异步任务"""
                 async with semaphore:
                     try:
+                        await self.delete_db(db_name)
                         await self.create_db(db_name)
                         await self.exec_sql_file(db_name, sql_file_path)
-                        db_url = self.get_db_url(db_name)
+                        db_url = self.get_sync_db_url(db_name)
                         await self.gen_tb_model(output_path, db_url)
                     finally:
                         progress.update(
@@ -100,14 +110,24 @@ class MyInit(DBInit):
             "password": cfg.password,
         }
 
+    async def delete_db(self, db_name: str):
+        """删除数据库"""
+        conn = await asyncmy.connect(**self.conn_conf, autocommit=True)
+        try:
+            async with conn.cursor() as cur:
+                await cur.execute(f"DROP DATABASE IF EXISTS `{db_name}`")
+        except Exception as e:
+            logger.exception(f"数据库 {db_name} 删除失败: {e}")
+        finally:
+            conn.close()
+
     async def create_db(self, db_name: str):
         conn = await asyncmy.connect(**self.conn_conf, autocommit=True)
         try:
             async with conn.cursor() as cur:
-                await cur.execute(f"CREATE DATABASE {db_name} CHARACTER SET utf8mb4")
+                await cur.execute(f"CREATE DATABASE `{db_name}` CHARACTER SET utf8mb4")
         except Exception as e:
-            if e.args[0] != 1007:
-                logger.exception(f"数据库 {db_name} 创建失败: {e}")
+            logger.exception(f"数据库 {db_name} 创建失败: {e}")
         finally:
             conn.close()
 
@@ -124,8 +144,11 @@ class MyInit(DBInit):
         finally:
             conn.close()
 
-    def get_db_url(self, db_name: str):
+    def get_sync_db_url(self, db_name: str):
         return f"mysql+pymysql://{self.config.user}:{self.config.password}@{self.config.host}:{self.config.port}/{db_name}"
+
+    def get_async_db_url(self, db_name: str):
+        return f"mysql+asyncmy://{self.config.user}:{self.config.password}@{self.config.host}:{self.config.port}/{db_name}"
 
     async def check_db_exists(self, db_name: str) -> bool:
         """检查 MySQL 数据库是否存在"""
@@ -153,13 +176,15 @@ class SQLiteInit(DBInit):
         self.config = cfg
         self.db_path_dir = Path(cfg.database).parent
 
+    async def delete_db(self, db_name: str):
+        """删除数据库文件"""
+        db_path = self.db_path_dir / f"{db_name}.db"
+        if db_path.exists():
+            db_path.unlink()
+
     async def create_db(self, db_name: str):
         # 从配置获取路径
         self.db_path_dir.mkdir(parents=True, exist_ok=True)
-        db_path = self.db_path_dir / f"{db_name}.db"
-        # 删除已存在的数据库文件（重新初始化）
-        if db_path.exists():
-            db_path.unlink()
 
     async def exec_sql_file(self, db_name: str, sql_file_path: Path):
         """执行 SQL 文件初始化表结构"""
@@ -171,9 +196,12 @@ class SQLiteInit(DBInit):
             except Exception as e:
                 logger.exception(f"{sql_file_path.stem} 执行sql失败: {e}")
 
-    def get_db_url(self, db_name: str):
-        """获取 SQLAlchemy 连接 URL"""
+    def get_sync_db_url(self, db_name: str):
         return f"sqlite:///{self.db_path_dir / f'{db_name}.db'}"
+
+    def get_async_db_url(self, db_name: str):
+        """获取 SQLAlchemy 连接 URL"""
+        return f"sqlite+aiosqlite:///{self.db_path_dir / f'{db_name}.db'}"
 
     async def check_db_exists(self, db_name: str) -> bool:
         """检查 SQLite 数据库文件是否存在"""

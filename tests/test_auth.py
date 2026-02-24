@@ -7,9 +7,10 @@ import pytest
 from faker import Faker
 from sqlalchemy import and_, desc, select
 
+from app.config import CFG
 from app.entities.auth import EmailCode
 from app.utils import db
-from tests.conftest import DB_DRIVER, db_mock
+from tests.conftest import db_mock
 
 fake = Faker("zh_CN")
 
@@ -22,7 +23,7 @@ def gen_test_user() -> dict:
 async def _get_latest_verification_code(email: str, code_type: str) -> str:
     """从数据库获取最新生成的验证码"""
     # 使用 get_db 创建新会话（解决事务隔离问题）
-    async for db_session in db.get_db("test_auth", db_mock.db_url, DB_DRIVER)():
+    async for db_session in db.get_db("test_auth", db_mock.db_url, CFG.db.driver)():
         stmt = (
             select(EmailCode)
             .where(
