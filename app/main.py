@@ -1,6 +1,9 @@
 from contextlib import asynccontextmanager
 
 import sqlalchemy.exc
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.config import CFG
 from app.entities.auth import Group, Scope
 from app.exceptions.handlers import register_exception_handlers
@@ -12,60 +15,62 @@ from app.repositories import user as user_repo
 from app.routers import api
 from app.utils import db
 from app.utils.log import logger, setup_logger
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 
 async def create_admin_user():
     """创建管理员用户（如果不存在）"""
     try:
+        admin_group = CFG.admin.group
+        admin_email = CFG.admin.email
+        admin_username = CFG.admin.username
+        admin_password = CFG.admin.password
         async for db_session in db.get_auth_db():
-            # 检查是否存在权限为 *
+            # 查找 * 权限
             all_scope = await scope_repo.get_by_name(db_session, "*")
+            # 如果权限存在，则结束
+            if all_scope:
+                return
 
-            # 如果不存在则创建管理员用户和管理员组，并赋予 * 权限（存在则覆盖）
-            # 创建权限
-            if not all_scope:
-                all_scope = Scope(name="*", description="全部权限")
-                db_session.add(all_scope)
-                await db_session.flush()
-                logger.info("Created * scope")
+            # 如果权限不存在，则创建
+            all_scope = Scope(name="*", description="全部权限")
+            db_session.add(all_scope)
+            await db_session.flush()
+            logger.info("Created * scope")
 
-            # 创建或覆盖组
-            admin_group = await group_repo.get_by_name_with_scope(db_session, "admin")
-            if not admin_group:
-                admin_group = Group(name="admin", scope=[all_scope])
-                db_session.add(admin_group)
+            # 查找管理员组
+            group = await group_repo.get_by_name_with_scope(db_session, admin_group)
+            # 如果组不存在，则创建
+            if not group:
+                group = Group(name=admin_group, scope=[all_scope])
+                db_session.add(group)
                 await db_session.flush()
                 logger.info("Created admin group with * scope")
-            elif "*" not in [s.name for s in admin_group.scope]:
-                admin_group.scope = [all_scope]
+            # 如果组存在但不包含 * 权限，则添加
+            elif "*" not in [s.name for s in group.scope]:
+                group.scope = [all_scope]
                 await db_session.flush()
                 logger.info("Updated admin group with * scope")
 
-            # 创建或更新用户
-            admin_user = await user_repo.get_by_email_with_group(
-                db_session, CFG.admin.email
-            )
-            if not admin_user:
-                admin_user = await user_repo.create(
+            # 查找是否存在预设的管理员用户
+            user = await user_repo.get_by_email_with_group(db_session, admin_email)
+            # 如果用户不存在，则创建
+            if not user:
+                user = await user_repo.create(
                     db_session,
-                    email=CFG.admin.email,
-                    username=CFG.admin.username,
-                    password=CFG.admin.password,
+                    email=admin_email,
+                    username=admin_username,
+                    password=admin_password,
                 )
-                await relation_repo.add_user_group(
-                    db_session, [(admin_user.id, admin_group.id)]
-                )
-                logger.info(f"Created admin user: {admin_user.email}")
-            elif "admin" not in [g.name for g in admin_user.group]:
-                admin_user.name = CFG.admin.username
-                admin_user.password_hash = user_repo.passwd_hash.hash(
-                    CFG.admin.password
-                )
-                admin_user.group = [admin_group]
+                # 将用户添加到组中
+                await relation_repo.add_user_group(db_session, [(user.id, group.id)])
+                logger.info(f"Created admin user: {user.email}")
+            # 如果用户存在但不在组中，则修改用户名和密码为预设值，并添加到组中
+            elif "admin" not in [g.name for g in user.group]:
+                user.name = admin_username
+                user.password_hash = user_repo.passwd_hash.hash(admin_password)
+                user.group = [group]
                 await db_session.commit()
-                logger.info(f"Updated admin user: {admin_user.email}")
+                logger.info(f"Updated admin user: {user.email}")
     except sqlalchemy.exc.OperationalError as e:
         logger.exception("操作失败，请先初始化数据库")
         raise e

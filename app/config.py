@@ -51,6 +51,7 @@ class AuthCfg(BaseModel):
 
 # 管理员配置
 class AdminCfg(BaseModel):
+    group: str
     email: str
     username: str
     password: str

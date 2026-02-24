@@ -162,7 +162,8 @@ class SQLiteInit(DBInit):
         self.db_url = f"sqlite:///{self.db_path_dir / f'{db_name}.db'}"
 
 
-if __name__ == "__main__":
+async def run():
+    """执行数据库初始化"""
     DB_DRIVER = CFG.db.driver
     DB_CONFIG = CFG.db.configs[DB_DRIVER]
 
@@ -190,3 +191,7 @@ if __name__ == "__main__":
         output_path = orm_dir / f"{f.stem}.py"
         db_sql_orm.append((db_name, sql_file_path, output_path))
     asyncio.run(db_init.init_db(db_sql_orm))
+
+
+if __name__ == "__main__":
+    asyncio.run(run())

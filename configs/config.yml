@@ -25,6 +25,7 @@ auth: # 认证配置
   refresh_token_expire_days: 7 # 刷新令牌过期时间（天）
 
 admin: # 管理员信息配置
+  group: admin # 管理员组
   email: ${oc.env:ADMIN_EMAIL} # 管理员邮箱
   username: ${oc.env:ADMIN_USERNAME} # 管理员用户名
   password: ${oc.env:ADMIN_PASSWORD} # 管理员密码
