@@ -12,11 +12,11 @@ from rich.progress import BarColumn, Progress, TextColumn
 from sqlacodegen.generators import DeclarativeGenerator
 from sqlalchemy import MetaData, create_engine
 
-from app.config import CFG, MySQLCfg, SQLiteCfg
+from . import config
 
 
 class DBInit:
-    def __init__(self, config):
+    def __init__(self, cfg):
         self.db_url = ""
 
     async def create_db(self, db_name: str):
@@ -91,13 +91,13 @@ class DBInit:
 class MyInit(DBInit):
     """MySQL 数据库初始化"""
 
-    def __init__(self, config: MySQLCfg):
-        self.config = config
+    def __init__(self, cfg: config.MySQLCfg):
+        self.config = cfg
         self.conn_conf = {
-            "host": config.host,
-            "port": config.port,
-            "user": config.user,
-            "password": config.password,
+            "host": cfg.host,
+            "port": cfg.port,
+            "user": cfg.user,
+            "password": cfg.password,
         }
 
     async def create_db(self, db_name: str):
@@ -149,9 +149,9 @@ class MyInit(DBInit):
 class SQLiteInit(DBInit):
     """SQLite 数据库初始化"""
 
-    def __init__(self, config: SQLiteCfg):
-        self.config = config
-        self.db_path_dir = Path(config.database).parent
+    def __init__(self, cfg: config.SQLiteCfg):
+        self.config = cfg
+        self.db_path_dir = Path(cfg.database).parent
 
     async def create_db(self, db_name: str):
         # 从配置获取路径
@@ -183,13 +183,13 @@ class SQLiteInit(DBInit):
 
 def prepare():
     """获取(数据库名,SQL脚本文件路径,表模型输出路径)元组"""
-    DB_DRIVER = CFG.db.driver
-    DB_CONFIG = CFG.db.configs[DB_DRIVER]
+    DB_DRIVER = config.CFG.db.driver
+    DB_CONFIG = config.CFG.db.configs[DB_DRIVER]
 
-    if isinstance(DB_CONFIG, MySQLCfg):
+    if isinstance(DB_CONFIG, config.MySQLCfg):
         # 配置数据库连接
         db_init = MyInit(DB_CONFIG)
-    elif isinstance(DB_CONFIG, SQLiteCfg):
+    elif isinstance(DB_CONFIG, config.SQLiteCfg):
         # 配置数据库路径
         db_init = SQLiteInit(DB_CONFIG)
     else:
