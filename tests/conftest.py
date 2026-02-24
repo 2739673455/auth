@@ -48,7 +48,8 @@ async def _create_admin_user():
     admin_email = CFG.admin.email
     admin_username = CFG.admin.username
     admin_password = CFG.admin.password
-    async for db_session in db.get_auth_db():
+    # 使用测试数据库
+    async for db_session in db.get_db(db_mock.db_name, db_mock.db_url, CFG.db.driver)():
         # 查找 * 权限
         all_scope = await scope_repo.get_by_name(db_session, "*")
         # 如果权限存在，则结束
