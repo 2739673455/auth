@@ -30,7 +30,7 @@ async def init_database_if_needed():
             need_init.append((db_name, sql_file_path, output_path))
             logger.info(f"数据库 {db_name} 不存在，初始化数据库")
         else:
-            logger.debug(f"数据库 {db_name} 已存在，跳过初始化")
+            logger.info(f"数据库 {db_name} 已存在，跳过初始化")
 
     if need_init:
         await db_init.init_db(need_init)

@@ -35,14 +35,14 @@ class DBInit:
         """执行 SQL 文件"""
         raise NotImplementedError
 
-    async def get_db_url(self, db_name: str):
+    def get_db_url(self, db_name: str):
         """获取数据库连接 url"""
         raise NotImplementedError
 
-    async def gen_tb_model(self, output_path: Path):
+    async def gen_tb_model(self, output_path: Path, db_url: str):
         """生成 SQLAlchemy 表模型"""
         # 创建 SQLAlchemy 数据库引擎
-        engine = create_engine(self.db_url)
+        engine = create_engine(db_url)
         # 创建元数据对象并反射数据库结构
         metadata = MetaData()
         metadata.reflect(engine)
@@ -78,8 +78,8 @@ class DBInit:
                     try:
                         await self.create_db(db_name)
                         await self.exec_sql_file(db_name, sql_file_path)
-                        await self.get_db_url(db_name)
-                        await self.gen_tb_model(output_path)
+                        db_url = self.get_db_url(db_name)
+                        await self.gen_tb_model(output_path, db_url)
                     finally:
                         progress.update(
                             task_id, advance=1, description=f"{db_name[:8]:<8}"
@@ -132,8 +132,8 @@ class MyInit(DBInit):
         finally:
             conn.close()
 
-    async def get_db_url(self, db_name: str):
-        self.db_url = f"mysql+pymysql://{self.config.user}:{self.config.password}@{self.config.host}:{self.config.port}/{db_name}"
+    def get_db_url(self, db_name: str):
+        return f"mysql+pymysql://{self.config.user}:{self.config.password}@{self.config.host}:{self.config.port}/{db_name}"
 
     async def check_db_exists(self, db_name: str) -> bool:
         """检查 MySQL 数据库是否存在"""
@@ -179,9 +179,9 @@ class SQLiteInit(DBInit):
             except Exception as e:
                 logger.exception(f"{sql_file_path.stem} 执行sql失败: {e}")
 
-    async def get_db_url(self, db_name: str):
+    def get_db_url(self, db_name: str):
         """获取 SQLAlchemy 连接 URL"""
-        self.db_url = f"sqlite:///{self.db_path_dir / f'{db_name}.db'}"
+        return f"sqlite:///{self.db_path_dir / f'{db_name}.db'}"
 
     async def check_db_exists(self, db_name: str) -> bool:
         """检查 SQLite 数据库文件是否存在"""
