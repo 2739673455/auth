@@ -189,20 +189,23 @@ class SQLiteInit(DBInit):
         return db_path.exists()
 
 
-async def run(db_driver, db_config):
-    """执行数据库初始化"""
-    if isinstance(db_config, MySQLCfg):
+def prepare():
+    """获取(数据库名,SQL脚本文件路径,表模型输出路径)元组"""
+    DB_DRIVER = CFG.db.driver
+    DB_CONFIG = CFG.db.configs[DB_DRIVER]
+
+    if isinstance(DB_CONFIG, MySQLCfg):
         # 配置数据库连接
-        db_init = MyInit(db_config)
-    elif isinstance(db_config, SQLiteCfg):
+        db_init = MyInit(DB_CONFIG)
+    elif isinstance(DB_CONFIG, SQLiteCfg):
         # 配置数据库路径
-        db_init = SQLiteInit(db_config)
+        db_init = SQLiteInit(DB_CONFIG)
     else:
-        logger.error(f"不支持的数据库驱动: {db_driver}")
+        logger.error(f"不支持的数据库驱动: {DB_DRIVER}")
         sys.exit(1)
 
     # SQL 文件目录
-    sql_dir = Path(__file__).parent.parent / "sql" / db_driver
+    sql_dir = Path(__file__).parent.parent / "sql" / DB_DRIVER
     # 获取所有 SQL 文件
     sql_files = list(sql_dir.glob("*.sql"))
     # 表模型输出目录
@@ -214,10 +217,9 @@ async def run(db_driver, db_config):
         sql_file_path = f
         output_path = orm_dir / f"{f.stem}.py"
         db_sql_orm.append((db_name, sql_file_path, output_path))
-    asyncio.run(db_init.init_db(db_sql_orm))
+    return db_init, db_sql_orm
 
 
 if __name__ == "__main__":
-    db_driver = CFG.db.driver
-    db_config = CFG.db.configs[db_driver]
-    asyncio.run(run(db_driver, db_config))
+    db_init, db_sql_orm = prepare()
+    asyncio.run(db_init.init_db(db_sql_orm))
