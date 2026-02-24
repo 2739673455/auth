@@ -10,13 +10,8 @@ from httpx import ASGITransport, AsyncClient
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.config import CFG
-from app.entities.auth import Group, Scope
 from app.init_db import prepare
-from app.main import app
-from app.repositories import group as group_repo
-from app.repositories import relation as relation_repo
-from app.repositories import scope as scope_repo
-from app.repositories import user as user_repo
+from app.main import app, create_admin_user
 from app.utils import db
 
 
@@ -42,67 +37,17 @@ class DBMock:
 db_mock = DBMock()
 
 
-async def _create_admin_user():
-    """创建管理员用户（如果不存在）"""
-    admin_group = CFG.admin.group
-    admin_email = CFG.admin.email
-    admin_username = CFG.admin.username
-    admin_password = CFG.admin.password
-    # 使用测试数据库
-    async for db_session in db.get_db(db_mock.db_name, db_mock.db_url, CFG.db.driver)():
-        # 查找 * 权限
-        all_scope = await scope_repo.get_by_name(db_session, "*")
-        # 如果权限存在，则结束
-        if all_scope:
-            return
-
-        # 如果权限不存在，则创建
-        all_scope = Scope(name="*", description="全部权限")
-        db_session.add(all_scope)
-        await db_session.flush()
-
-        # 查找管理员组
-        group = await group_repo.get_by_name_with_scope(db_session, admin_group)
-        # 如果组不存在，则创建
-        if not group:
-            group = Group(name=admin_group, scope=[all_scope])
-            db_session.add(group)
-            await db_session.flush()
-        # 如果组存在但不包含 * 权限，则添加
-        elif "*" not in [s.name for s in group.scope]:
-            group.scope = [all_scope]
-            await db_session.flush()
-
-        # 查找是否存在预设的管理员用户
-        user = await user_repo.get_by_email_with_group(db_session, admin_email)
-        # 如果用户不存在，则创建
-        if not user:
-            user = await user_repo.create(
-                db_session,
-                email=admin_email,
-                username=admin_username,
-                password=admin_password,
-            )
-            # 将用户添加到组中
-            await relation_repo.add_user_group(db_session, [(user.id, group.id)])
-        # 如果用户存在但不在组中，则修改用户名和密码为预设值，并添加到组中
-        elif "admin" not in [g.name for g in user.group]:
-            user.name = admin_username
-            user.password_hash = user_repo.passwd_hash.hash(admin_password)
-            user.group = [group]
-            await db_session.commit()
-
-
 @pytest.fixture(scope="session", autouse=True)
 async def setup_test_database():
     """创建测试数据库并初始化表结构"""
     await db_mock.init()
 
-    await _create_admin_user()
+    async for db_session in db.get_db(db_mock.db_name, db_mock.db_url, CFG.db.driver)():
+        await create_admin_user(db_session)
 
     yield
 
-    # await db_mock.clean()
+    await db_mock.clean()
 
 
 @pytest_asyncio.fixture
