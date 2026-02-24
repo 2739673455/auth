@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 import sqlalchemy.exc
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
 from app.config import CFG
 from app.entities.auth import Group, Scope
@@ -15,7 +16,7 @@ from app.repositories import scope as scope_repo
 from app.repositories import user as user_repo
 from app.routers import api
 from app.utils import db
-from app.utils.log import logger, setup_logger
+from app.utils.log import setup_logger
 
 
 async def init_database_if_needed():
