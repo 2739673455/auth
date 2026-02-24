@@ -1,9 +1,6 @@
 from contextlib import asynccontextmanager
 
 import sqlalchemy.exc
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
 from app.config import CFG
 from app.entities.auth import Group, Scope
 from app.exceptions.handlers import register_exception_handlers
@@ -15,6 +12,8 @@ from app.repositories import user as user_repo
 from app.routers import api
 from app.utils import db
 from app.utils.log import logger, setup_logger
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 
 async def create_admin_user():
@@ -25,7 +24,7 @@ async def create_admin_user():
             all_scope = await scope_repo.get_by_name(db_session, "*")
 
             # 如果不存在则创建管理员用户和管理员组，并赋予 * 权限（存在则覆盖）
-            # 创建或覆盖权限
+            # 创建权限
             if not all_scope:
                 all_scope = Scope(name="*", description="全部权限")
                 db_session.add(all_scope)
