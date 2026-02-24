@@ -6,16 +6,7 @@ from pathlib import Path
 from loguru import logger
 
 from app.config import CFG, LogCfg
-from app.utils.context import (
-    client_ip_ctx,
-    method_ctx,
-    path_ctx,
-    request_id_ctx,
-    response_time_ms_ctx,
-    status_ctx,
-    trace_id_ctx,
-    user_id_ctx,
-)
+from app.utils import context
 
 LOGGER_CONFIGURED = False  # 日志是否已初始化
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"  # 日志文件目录
@@ -26,14 +17,14 @@ def _build_log_json(record):
     log_json = {
         "time": record["time"].strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
         "level": record["level"].name,
-        "request_id": request_id_ctx.get(),
-        "trace_id": trace_id_ctx.get(),
-        "client_ip": client_ip_ctx.get(),
-        "method": method_ctx.get(),
-        "path": path_ctx.get(),
-        "user_id": user_id_ctx.get(),
-        "status": status_ctx.get(),
-        "response_time_ms": response_time_ms_ctx.get(),
+        "request_id": context.request_id_ctx.get(),
+        "trace_id": context.trace_id_ctx.get(),
+        "client_ip": context.client_ip_ctx.get(),
+        "method": context.method_ctx.get(),
+        "path": context.path_ctx.get(),
+        "user_id": context.user_id_ctx.get(),
+        "status": context.status_ctx.get(),
+        "response_time_ms": context.response_time_ms_ctx.get(),
         "message": record["message"],
     }
 

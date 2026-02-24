@@ -3,7 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.exceptions.base import AppError
-from app.utils.context import trace_id_ctx
+from app.utils import context
 from app.utils.log import logger
 
 
@@ -14,7 +14,7 @@ def _build_response(
     payload = {"code": code, "exc_type": exc_type, "message": message}
     if detail:
         payload["detail"] = detail
-    trace_id = trace_id_ctx.get()
+    trace_id = context.trace_id_ctx.get()
     if trace_id:
         payload["trace_id"] = trace_id
     return JSONResponse(status_code=status_code, content=payload)
