@@ -78,7 +78,7 @@ async def api_register(
     user = await user_repo.create(db_session, body.email, body.username, body.password)
     # 设置 user_id 到 ContextVar
     context.user_id_ctx.set(str(user.id))
-    logger.info("User register")
+    logger.info("Register")
     # 创建并设置令牌
     await _create_and_set_token(db_session, user.id, response)
 
@@ -97,7 +97,7 @@ async def api_login(
         raise user_error.UserNotFoundError  # 用户不存在
     # 设置 user_id 到 ContextVar
     context.user_id_ctx.set(str(user.id))
-    logger.info("User login")
+    logger.info("Login")
     # 检查用户是否被禁用
     if not user.yn:
         raise user_error.UserDisabledError  # 用户被禁用
