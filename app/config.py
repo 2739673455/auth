@@ -2,7 +2,7 @@ from pathlib import Path
 
 import dotenv
 from omegaconf import OmegaConf
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 
 # 数据库
@@ -14,21 +14,9 @@ class MySQLCfg(BaseModel):
     database: str
 
 
-class SQLiteCfg(BaseModel):
-    database: str
-
-    @field_validator("database")
-    @classmethod
-    def resolve_database(cls, v: str) -> str:
-        """将相对路径转换为项目根目录下的绝对路径"""
-        root_dir = Path(__file__).parent.parent
-        p = root_dir / v
-        return str(p.resolve())
-
-
 class DBCfg(BaseModel):
     driver: str
-    configs: dict[str, MySQLCfg | SQLiteCfg]
+    configs: dict[str, MySQLCfg]
 
 
 # 日志

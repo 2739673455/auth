@@ -4,7 +4,6 @@ import asyncio
 import sys
 from pathlib import Path
 
-import aiosqlite
 import asyncmy
 from loguru import logger
 from rich.console import Console
@@ -169,46 +168,6 @@ class MyInit(DBInit):
             return False
 
 
-class SQLiteInit(DBInit):
-    """SQLite 数据库初始化"""
-
-    def __init__(self, cfg: config.SQLiteCfg):
-        self.config = cfg
-        self.db_path_dir = Path(cfg.database).parent
-
-    async def delete_db(self, db_name: str):
-        """删除数据库文件"""
-        db_path = self.db_path_dir / f"{db_name}.db"
-        if db_path.exists():
-            db_path.unlink()
-
-    async def create_db(self, db_name: str):
-        # 从配置获取路径
-        self.db_path_dir.mkdir(parents=True, exist_ok=True)
-
-    async def exec_sql_file(self, db_name: str, sql_file_path: Path):
-        """执行 SQL 文件初始化表结构"""
-        with open(sql_file_path, "r", encoding="utf-8") as f:
-            sql = f.read()
-        async with aiosqlite.connect(self.db_path_dir / f"{db_name}.db") as conn:
-            try:
-                await conn.executescript(sql)
-            except Exception as e:
-                logger.exception(f"{sql_file_path.stem} 执行sql失败: {e}")
-
-    def get_sync_db_url(self, db_name: str):
-        return f"sqlite:///{self.db_path_dir / f'{db_name}.db'}"
-
-    def get_async_db_url(self, db_name: str):
-        """获取 SQLAlchemy 连接 URL"""
-        return f"sqlite+aiosqlite:///{self.db_path_dir / f'{db_name}.db'}"
-
-    async def check_db_exists(self, db_name: str) -> bool:
-        """检查 SQLite 数据库文件是否存在"""
-        db_path = self.db_path_dir / f"{db_name}.db"
-        return db_path.exists()
-
-
 def prepare():
     """获取(数据库名,SQL脚本文件路径,表模型输出路径)元组"""
     DB_DRIVER = config.CFG.db.driver
@@ -217,9 +176,6 @@ def prepare():
     if isinstance(DB_CONFIG, config.MySQLCfg):
         # 配置数据库连接
         db_init = MyInit(DB_CONFIG)
-    elif isinstance(DB_CONFIG, config.SQLiteCfg):
-        # 配置数据库路径
-        db_init = SQLiteInit(DB_CONFIG)
     else:
         logger.error(f"不支持的数据库驱动: {DB_DRIVER}")
         sys.exit(1)
