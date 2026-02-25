@@ -104,12 +104,6 @@ class UserResponse(BaseModel):
     groups: list[str] = Field(..., description="用户组")
 
 
-class LoginResponse(BaseModel):
-    access_token: str = Field(..., description="访问令牌")
-    refresh_token: str = Field(..., description="刷新令牌")
-    token_type: str = Field(..., description="令牌类型")
-
-
 class SendCodeRequest(BaseModel):
     email: EmailStr = Field(..., description="邮箱")
     type: str = Field(

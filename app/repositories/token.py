@@ -1,97 +1,151 @@
-"""刷新令牌数据访问"""
+"""访问令牌数据访问
 
-from datetime import datetime
+使用 Redis 存储访问令牌权限，并通过 Sorted Set 维护令牌索引以支持批量操作。
 
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+Redis Key 设计:
+    - access_token:{user_id}:{jti} - 存储令牌权限（String，带 TTL）
+    - access_tokens:{user_id} - 令牌索引（Sorted Set，分数为过期时间戳）
+"""
 
-from app.entities.auth import RefreshToken
+import json
+import time
+
+from app.utils import redis as redis_util
+
+TOKEN_KEY = "access_token:{user_id}:{jti}"
+INDEX_KEY = "access_tokens:{user_id}"
 
 
 async def create(
-    db_session: AsyncSession, jti: str, user_id: int, expires_at: datetime
-) -> RefreshToken:
-    """在数据库中创建新的刷新令牌记录
+    user_id: int, jti: str, expire_seconds: int, scopes: list[str]
+) -> None:
+    """创建访问令牌
+
+    在 Redis 中存储令牌权限，并将 jti 添加到 Sorted Set 索引。
 
     Args:
-        db_session: 数据库会话
-        jti: JWT 唯一标识符
         user_id: 关联的用户 ID
-        expires_at: 令牌过期时间
+        jti: JWT 唯一标识符
+        expire_seconds: 过期秒数
+        scopes: 权限列表
+    """
+    r = await redis_util.get()
+    key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+
+    # 存储信息
+    data = {"scope": scopes}
+    await r.setex(key, expire_seconds, json.dumps(data))
+
+    # 将 jti 添加到 Sorted Set，分数为过期时间戳
+    expire_timestamp = int(time.time()) + expire_seconds
+    await r.zadd(INDEX_KEY.format(user_id=user_id), {jti: expire_timestamp})
+
+
+async def update(user_id: int, jti: str, scopes: list[str]) -> None:
+    """更新单个访问令牌权限
+
+    保留原有过期时间，仅更新权限内容。
+
+    Args:
+        user_id: 关联的用户 ID
+        jti: JWT 唯一标识符
+        scopes: 新的权限列表
+    """
+    r = await redis_util.get()
+    key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+    # 存储信息
+    data = {"scope": scopes}
+    await r.set(key, json.dumps(data), keepttl=True)
+
+
+async def update_all(user_id: int, scopes: list[str]) -> None:
+    """更新用户所有有效令牌的权限
+
+    先清理索引中已过期的令牌，再更新所有有效令牌的权限。
+
+    Args:
+        user_id: 关联的用户 ID
+        scopes: 新的权限列表
+    """
+    r = await redis_util.get()
+    index_key = INDEX_KEY.format(user_id=user_id)
+    now = int(time.time())
+
+    # 清理已过期的令牌索引
+    await r.zremrangebyscore(index_key, "-inf", now)
+
+    # 获取所有未过期的 jti
+    jtis = await r.zrange(index_key, 0, -1)
+
+    if jtis:
+        # 更新每个令牌的权限
+        for jti in jtis:
+            key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+            data = {"scope": scopes}
+            await r.set(key, json.dumps(data), keepttl=True)
+
+
+async def revoke(user_id: int, jti: str) -> None:
+    """撤销指定的访问令牌
+
+    删除令牌数据并从索引中移除。
+
+    Args:
+        user_id: 关联的用户 ID
+        jti: JWT 唯一标识符
 
     Returns:
-        创建成功的 RefreshToken 对象
+        是否成功撤销（令牌存在时返回 True）
     """
-    refresh_token = RefreshToken(jti=jti, user_id=user_id, expires_at=expires_at)
-    db_session.add(refresh_token)
-    await db_session.commit()
-    await db_session.refresh(refresh_token)
-    return refresh_token
+    r = await redis_util.get()
+    key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+    # 检查令牌是否存在
+    data = await r.get(key)
+    if data:
+        # 删除令牌
+        await r.delete(key)
+        # 从索引中移除
+        await r.zrem(INDEX_KEY.format(user_id=user_id), jti)
 
 
-async def revoke(db_session: AsyncSession, jti: str, user_id: int) -> None:
-    """撤销指定的刷新令牌（软删除）
+async def revoke_all(user_id: int) -> None:
+    """撤销用户的所有有效访问令牌
 
-    将令牌的 yn 字段设置为 0，表示已撤销
+    先清理索引中已过期的令牌，再批量删除所有有效令牌及其索引。
 
     Args:
-        db_session: 数据库会话
-        jti: JWT 唯一标识符
-        user_id: 关联的用户 ID（用于验证令牌归属）
-    """
-    stmt = (
-        update(RefreshToken)
-        .where(
-            RefreshToken.jti == jti,
-            RefreshToken.user_id == user_id,
-            RefreshToken.yn == 1,
-        )
-        .values(yn=0)
-    )
-    await db_session.execute(stmt)
-    await db_session.commit()
-
-
-async def revoke_all(db_session: AsyncSession, user_id: int) -> None:
-    """撤销用户的所有有效刷新令牌（软删除）
-
-    通常用于用户修改密码、登出所有设备等场景
-
-    Args:
-        db_session: 数据库会话
         user_id: 要撤销所有令牌的用户 ID
     """
-    stmt = (
-        update(RefreshToken)
-        .where(
-            RefreshToken.user_id == user_id,
-            RefreshToken.yn == 1,
-        )
-        .values(yn=0)
-    )
-    await db_session.execute(stmt)
-    await db_session.commit()
+    r = await redis_util.get()
+    index_key = INDEX_KEY.format(user_id=user_id)
+    now = int(time.time())
+
+    # 清理已过期的令牌索引
+    await r.zremrangebyscore(index_key, "-inf", now)
+
+    # 获取所有未过期的 jti
+    jtis = await r.zrange(index_key, 0, -1)
+
+    if jtis:
+        # 构建所有 key 并批量删除，同时删除索引
+        keys = [TOKEN_KEY.format(user_id=user_id, jti=jti) for jti in jtis] + [
+            index_key
+        ]
+        await r.delete(*keys)
 
 
-async def get_by_jti_userid(
-    db_session: AsyncSession, jti: str, user_id: int
-) -> tuple[bool, datetime] | None:
-    """通过 JTI 和用户 ID 获取刷新令牌的状态信息
+async def get(user_id: int, jti: str) -> dict | None:
+    """获取访问令牌数据
 
     Args:
-        db_session: 数据库会话
-        jti: JWT 唯一标识符
         user_id: 关联的用户 ID
+        jti: JWT 唯一标识符
 
     Returns:
-        元组 (是否有效, 过期时间)，如果令牌不存在则返回 None
+        令牌数据字典，如果令牌不存在则返回 None
     """
-    stmt = select(RefreshToken.yn, RefreshToken.expires_at).where(
-        RefreshToken.jti == jti, RefreshToken.user_id == user_id
-    )
-    result = await db_session.execute(stmt)
-    token_record = result.first()
-    if not token_record:
-        return None
-    yn, expires_at = token_record
-    return bool(yn), expires_at
+    r = await redis_util.get()
+    key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+    data = await r.get(key)
+    if data:
+        return json.loads(data)

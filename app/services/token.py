@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import CFG
 from app.exceptions import auth as auth_error
+from app.exceptions import user as user_error
 from app.repositories import token as token_repo
+from app.repositories import user as user_repo
 from app.schemas import token as token_schema
 from app.utils import context
 
@@ -20,9 +22,8 @@ async def create_access_token(db_session: AsyncSession, user_id: int) -> str:
     """创建并存储访问令牌"""
     # 生成访问令牌
     jti = str(uuid.uuid4())  # JWT ID
-    expire = datetime.now() + timedelta(
-        days=CFG.auth.access_token_expire_days
-    )  # 过期时间
+    expire_seconds = CFG.auth.access_token_expire_days * 24 * 60 * 60
+    expire = datetime.now() + timedelta(seconds=expire_seconds)  # 过期时间
     payload = {
         "sub": str(user_id),
         "exp": expire.timestamp(),
@@ -31,8 +32,21 @@ async def create_access_token(db_session: AsyncSession, user_id: int) -> str:
     }
     token = jwt.encode(payload, CFG.auth.secret_key, CFG.auth.algorithm)
 
+    # 查询用户权限
+    user = await user_repo.get_by_id_with_group_scope(db_session, user_id)
+    if not user:
+        raise user_error.UserNotFoundError  # 用户不存在
+    scopes = []
+    seen_scope_ids = set()
+    if user.group:
+        for g in user.group:
+            for s in g.scope:
+                if s.id not in seen_scope_ids:
+                    seen_scope_ids.add(s.id)
+                    scopes.append(s.name)
+
     # 存储访问令牌
-    await token_repo.create(db_session, jti, user_id, expire)
+    await token_repo.create(user_id, jti, expire_seconds, scopes)
 
     return token
 
@@ -55,15 +69,13 @@ def _decode_access_token(
 
 async def authenticate_access_token(
     payload: Annotated[token_schema.AccessTokenPayload, Depends(_decode_access_token)],
-) -> token_schema.AccessTokenPayload:
+):
     """验证访问令牌"""
     # 设置 user_id 到 ContextVar
     context.user_id_ctx.set(str(payload.sub))
 
     # 验证访问令牌是否存在
-    token = await token_repo.get_by_jti_userid(
-        db_session, payload.jti, int(payload.sub)
-    )
-    if not token:
+    data = await token_repo.get(int(payload.sub), payload.jti)
+    if not data:
         raise auth_error.InvalidAccessTokenError  # 访问令牌不存在
-    return payload
+    return data

@@ -19,6 +19,14 @@ class DBCfg(BaseModel):
     configs: dict[str, MySQLCfg]
 
 
+# Redis 配置
+class RedisCfg(BaseModel):
+    host: str
+    port: int
+    password: str
+    db: int
+
+
 # 日志
 class LogCfg(BaseModel):
     to_console_level: str
@@ -60,6 +68,8 @@ class Cfg(BaseModel):
     auth: AuthCfg
     admin: AdminCfg
     email: EmailCfg
+    redis: RedisCfg
+    email_code_expire_seconds: int
     cors_origins: list[str]
 
 

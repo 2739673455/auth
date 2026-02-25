@@ -16,6 +16,7 @@ from app.repositories import scope as scope_repo
 from app.repositories import user as user_repo
 from app.routers import api
 from app.utils import db
+from app.utils import redis as redis_util
 from app.utils.log import setup_logger
 
 
@@ -114,6 +115,9 @@ async def lifespan(app: FastAPI):
 
     # 关闭数据库引擎
     await db.close_all()
+
+    # 关闭 Redis 连接
+    await redis_util.close()
 
 
 app = FastAPI(lifespan=lifespan)

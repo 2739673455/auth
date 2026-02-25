@@ -1,8 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import CFG
 from app.exceptions import user as user_error
 from app.repositories import token as token_repo
 from app.repositories import user as user_repo
@@ -19,20 +20,19 @@ router = APIRouter(tags=["user"])
 
 
 async def _create_and_set_token(
-    db_session: AsyncSession, user_id: int, scopes: list[str], response: Response
+    db_session: AsyncSession, user_id: int, response: Response
 ):
     """创建并设置令牌"""
-    # 创建访问令牌和刷新令牌
-    tokens = await token_service.create_access_token(db_session, user_id, scopes)
-    # 在 Cookie 中设置 refresh_token
+    # 创建访问令牌
+    token = await token_service.create_access_token(db_session, user_id)
+    # 在 Cookie 中设置 access_token
     response.set_cookie(
-        key="refresh_token",  # Cookie 名称，用于存储刷新令牌
-        value=tokens["refresh_token"],  # 从 JWT 创建的刷新令牌值
+        key="access_token",  # Cookie 名称，用于存储访问令牌
+        value=token,  # 从 JWT 创建的访问令牌值
         httponly=True,  # 防止 JavaScript 访问 Cookie
         secure=False,  # 在 HTTP 和 HTTPS 下都可以发送
         samesite="lax",  # 防止 CSRF 攻击，允许跨站 GET 请求时发送 Cookie
     )
-    return tokens
 
 
 @router.post("/send_email_code")
@@ -54,7 +54,9 @@ async def api_send_email_code(
         if not user.yn:
             raise user_error.UserDisabledError  # 用户被禁用
     # 创建验证码
-    code = await email_code_service.create_email_code(db_session, body.email, body.type)
+    code = await email_code_service.create_email_code(
+        body.email, body.type, CFG.email_code_expire_seconds
+    )
     # 发送验证码邮件
     await email_service.send_verification_code(body.email, code, body.type)
     logger.info(f"Email code sent to: {body.email}")
@@ -65,15 +67,13 @@ async def api_register(
     body: user_schema.RegisterRequest,
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
     response: Response,
-) -> user_schema.LoginResponse:
+) -> None:
     """注册新用户"""
     # 检查邮箱是否已经注册
     if await user_repo.get_by_email(db_session, body.email):
         raise user_error.EmailAlreadyExistsError  # 邮箱已注册
     # 验证邮箱验证码
-    await email_code_service.verify_email_code(
-        db_session, body.email, body.code, "register"
-    )
+    await email_code_service.verify_email_code(body.email, "register", body.code)
     # 将用户加入数据库
     user = await user_repo.create(db_session, body.email, body.username, body.password)
     # 获取用户信息
@@ -84,13 +84,8 @@ async def api_register(
     # 设置 user_id 到 ContextVar
     context.user_id_ctx.set(str(user.id))
     logger.info("User register")
-    # 获取权限信息
-    scopes = list(
-        {s.name for g in user.group if g.yn == 1 for s in g.scope if s.yn == 1}
-    )
     # 创建并设置令牌
-    tokens = await _create_and_set_token(db_session, user.id, scopes, response)
-    return user_schema.LoginResponse(**tokens)
+    await _create_and_set_token(user.id, response)
 
 
 @router.post("/login")
@@ -98,7 +93,7 @@ async def api_login(
     body: user_schema.LoginRequest,
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
     response: Response,
-) -> user_schema.LoginResponse:
+) -> None:
     """用户登录"""
     # 通过邮箱获取用户信息
     user = await user_repo.get_by_email_with_group_scope(db_session, body.email)
@@ -119,8 +114,7 @@ async def api_login(
     if not user_service.verify_password(user, body.password):
         raise user_error.InvalidCredentialsError  # 邮箱或密码错误
     # 创建并设置令牌
-    tokens = await _create_and_set_token(db_session, user.id, scopes, response)
-    return user_schema.LoginResponse(**tokens)
+    await _create_and_set_token(user.id, response)
 
 
 @router.get("/me")
@@ -146,7 +140,7 @@ async def api_me(
     return user_schema.UserResponse(username=user.name, email=user.email, groups=groups)
 
 
-@router.post("/me/username", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/me/username")
 async def api_update_username(
     body: user_schema.UpdateUsernameRequest,
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
@@ -172,16 +166,16 @@ async def api_update_username(
     await user_repo.update(db_session, user, username=body.username)
 
 
-@router.post("/me/email", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/me/email")
 async def api_update_email(
     body: user_schema.UpdateEmailRequest,
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
     payload: Annotated[
-        token_schema.RefreshTokenPayload,
-        Depends(token_service.authenticate_refresh_token),
+        token_schema.AccessTokenPayload,
+        Depends(token_service.authenticate_access_token),
     ],
     response: Response,
-) -> user_schema.LoginResponse:
+) -> None:
     """修改邮箱"""
     logger.info("User update email")
     # 获取用户信息
@@ -208,20 +202,19 @@ async def api_update_email(
         {s.name for g in user.group if g.yn == 1 for s in g.scope if s.yn == 1}
     )
     # 创建并设置令牌
-    tokens = await _create_and_set_token(db_session, user.id, scopes, response)
-    return user_schema.LoginResponse(**tokens)
+    await _create_and_set_token(user.id, response)
 
 
-@router.post("/me/password", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/me/password")
 async def api_update_password(
     body: user_schema.UpdatePasswordRequest,
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
     payload: Annotated[
-        token_schema.RefreshTokenPayload,
-        Depends(token_service.authenticate_refresh_token),
+        token_schema.AccessTokenPayload,
+        Depends(token_service.authenticate_access_token),
     ],
     response: Response,
-) -> user_schema.LoginResponse:
+) -> None:
     """修改密码"""
     logger.info("User update password")
     # 获取用户信息
@@ -245,52 +238,21 @@ async def api_update_password(
         {s.name for g in user.group if g.yn == 1 for s in g.scope if s.yn == 1}
     )
     # 创建并设置令牌
-    tokens = await _create_and_set_token(db_session, user.id, scopes, response)
-    return user_schema.LoginResponse(**tokens)
+    await _create_and_set_token(user.id, response)
 
 
 @router.post("/logout")
 async def api_logout(
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
     payload: Annotated[
-        token_schema.RefreshTokenPayload,
-        Depends(token_service.authenticate_refresh_token),
+        token_schema.AccessTokenPayload,
+        Depends(token_service.authenticate_access_token),
     ],
 ) -> None:
     """登出"""
     logger.info("Logout")
     # 撤销旧的刷新令牌
     await token_repo.revoke(db_session, payload.jti, payload.sub)
-
-
-@router.post("/refresh")
-async def api_refresh(
-    db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
-    payload: Annotated[
-        token_schema.RefreshTokenPayload,
-        Depends(token_service.authenticate_refresh_token),
-    ],
-    response: Response,
-) -> user_schema.LoginResponse:
-    """刷新访问令牌"""
-    logger.info("Refresh access token")
-    # 撤销旧的刷新令牌
-    await token_repo.revoke(db_session, payload.jti, payload.sub)
-    # 获取用户信息
-    user = await user_repo.get_by_id_with_group_scope(db_session, payload.sub)
-    # 检查用户是否存在
-    if not user:
-        raise user_error.UserNotFoundError  # 用户不存在
-    # 检查用户是否被禁用
-    if not user.yn:
-        raise user_error.UserDisabledError  # 用户被禁用
-    # 获取权限信息
-    scopes = list(
-        {s.name for g in user.group if g.yn == 1 for s in g.scope if s.yn == 1}
-    )
-    # 创建并设置令牌
-    tokens = await _create_and_set_token(db_session, user.id, scopes, response)
-    return user_schema.LoginResponse(**tokens)
 
 
 @router.post("/verify_access_token")

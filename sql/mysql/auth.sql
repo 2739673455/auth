@@ -1,7 +1,5 @@
 SET GLOBAL time_zone = '+08:00';
 SET SESSION time_zone = '+08:00';
-DROP TABLE IF EXISTS `email_code`;
-DROP TABLE IF EXISTS `refresh_token`;
 DROP TABLE IF EXISTS `group_user_rel`;
 DROP TABLE IF EXISTS `group_scope_rel`;
 DROP TABLE IF EXISTS `user`;
@@ -48,25 +46,3 @@ CREATE TABLE `group_user_rel` (
     FOREIGN KEY (`group_id`) REFERENCES `group` (`id`) ON DELETE CASCADE,
     FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
 ) COMMENT '组-用户关系';
-
-CREATE TABLE `refresh_token` (
-    `jti` VARCHAR(255) NOT NULL PRIMARY KEY COMMENT 'JWT唯一标识',
-    `user_id` BIGINT NOT NULL COMMENT '用户ID',
-    `create_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `expires_at` DATETIME NOT NULL COMMENT '过期时间',
-    `yn` TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用',
-    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE,
-    INDEX idx_refresh_token_user_id (user_id)
-) COMMENT '刷新令牌';
-
-CREATE TABLE `email_code` (
-    `id` INT AUTO_INCREMENT PRIMARY KEY COMMENT 'ID',
-    `email` VARCHAR(100) NOT NULL COMMENT '邮箱',
-    `code` VARCHAR(10) NOT NULL COMMENT '验证码',
-    `type` VARCHAR(20) NOT NULL COMMENT '类型：register-注册, reset_email-重置邮箱, reset_password-重置密码',
-    `expire_at` DATETIME NOT NULL COMMENT '过期时间',
-    `used` TINYINT NOT NULL DEFAULT 0 COMMENT '是否已使用',
-    `create_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    INDEX idx_email_code_email (email),
-    INDEX idx_email_code_expire_at (expire_at)
-) COMMENT '邮箱验证码';
