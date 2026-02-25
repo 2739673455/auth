@@ -23,7 +23,7 @@ async def _create_and_set_token(
 ):
     """创建并设置令牌"""
     # 创建访问令牌和刷新令牌
-    tokens = await token_service.create_token(db_session, user_id, scopes)
+    tokens = await token_service.create_access_token(db_session, user_id, scopes)
     # 在 Cookie 中设置 refresh_token
     response.set_cookie(
         key="refresh_token",  # Cookie 名称，用于存储刷新令牌

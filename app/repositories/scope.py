@@ -111,27 +111,6 @@ async def get_by_name_with_group_user(
     return await _execute_with_group_user(db_session, stmt)
 
 
-async def get_by_ids(
-    db_session: AsyncSession,
-    scope_ids: list[int],
-) -> list[Scope]:
-    """通过权限 ID 列表批量获取权限
-
-    Args:
-        db_session: 数据库会话
-        scope_ids: 权限 ID 列表
-
-    Returns:
-        权限对象列表（只返回存在的权限）
-    """
-    if not scope_ids:
-        return []
-    stmt = select(Scope).where(Scope.id.in_(scope_ids))
-    result = await db_session.execute(stmt)
-    scopes = result.scalars().all()
-    return list(scopes)
-
-
 async def create(
     db_session: AsyncSession, name: str, description: str | None = None
 ) -> Scope:

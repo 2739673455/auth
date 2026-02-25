@@ -149,27 +149,6 @@ async def get_by_name_with_user_scope(
     return await _execute_with_user_scope(db_session, stmt)
 
 
-async def get_by_ids(
-    db_session: AsyncSession,
-    group_ids: list[int],
-) -> list[Group]:
-    """通过组 ID 列表批量获取组
-
-    Args:
-        db_session: 数据库会话
-        group_ids: 组 ID 列表
-
-    Returns:
-        组对象列表（只返回存在的组）
-    """
-    if not group_ids:
-        return []
-    stmt = select(Group).where(Group.id.in_(group_ids))
-    result = await db_session.execute(stmt)
-    groups = result.scalars().all()
-    return list(groups)
-
-
 async def create(db_session: AsyncSession, name: str) -> Group:
     """创建新组
 

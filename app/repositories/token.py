@@ -73,7 +73,7 @@ async def revoke_all(db_session: AsyncSession, user_id: int) -> None:
     await db_session.commit()
 
 
-async def get_by_jti(
+async def get_by_jti_userid(
     db_session: AsyncSession, jti: str, user_id: int
 ) -> tuple[bool, datetime] | None:
     """通过 JTI 和用户 ID 获取刷新令牌的状态信息

@@ -19,8 +19,7 @@ log: # 日志
 auth: # 认证配置
   secret_key: ${oc.env:AUTH_SECRET_KEY} # 令牌加密密钥
   algorithm: HS256 # 加密算法
-  access_token_expire_minutes: 60 # 访问令牌过期时间（分钟）
-  refresh_token_expire_days: 7 # 刷新令牌过期时间（天）
+  access_token_expire_days: 7 # 访问令牌过期时间（天）
 
 admin: # 管理员信息配置
   group: admin # 管理员组

@@ -114,27 +114,6 @@ async def get_by_email_with_group_scope(
     return await _execute_with_group_scope(db_session, stmt)
 
 
-async def get_by_ids(
-    db_session: AsyncSession,
-    user_ids: list[int],
-) -> list[User]:
-    """通过用户 ID 列表批量获取用户
-
-    Args:
-        db_session: 数据库会话
-        user_ids: 用户 ID 列表
-
-    Returns:
-        用户对象列表（只返回存在的用户）
-    """
-    if not user_ids:
-        return []
-    stmt = select(User).where(User.id.in_(user_ids))
-    result = await db_session.execute(stmt)
-    users = result.scalars().all()
-    return list(users)
-
-
 async def create(
     db_session: AsyncSession,
     email: str,
