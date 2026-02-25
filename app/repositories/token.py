@@ -30,11 +30,11 @@ async def create(
         scopes: 权限列表
     """
     r = await redis_util.get()
-    key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+    token_key = TOKEN_KEY.format(user_id=user_id, jti=jti)
 
     # 存储信息
     data = {"scope": scopes}
-    await r.setex(key, expire_seconds, json.dumps(data))
+    await r.setex(token_key, expire_seconds, json.dumps(data))
 
     # 将 jti 添加到 Sorted Set，分数为过期时间戳
     expire_timestamp = int(time.time()) + expire_seconds
@@ -52,10 +52,11 @@ async def update(user_id: int, jti: str, scopes: list[str]) -> None:
         scopes: 新的权限列表
     """
     r = await redis_util.get()
-    key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+    token_key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+
     # 存储信息
     data = {"scope": scopes}
-    await r.set(key, json.dumps(data), keepttl=True)
+    await r.set(token_key, json.dumps(data), keepttl=True)
 
 
 async def update_all(user_id: int, scopes: list[str]) -> None:
@@ -80,9 +81,9 @@ async def update_all(user_id: int, scopes: list[str]) -> None:
     if jtis:
         # 更新每个令牌的权限
         for jti in jtis:
-            key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+            token_key = TOKEN_KEY.format(user_id=user_id, jti=jti)
             data = {"scope": scopes}
-            await r.set(key, json.dumps(data), keepttl=True)
+            await r.set(token_key, json.dumps(data), keepttl=True)
 
 
 async def revoke(user_id: int, jti: str) -> None:
@@ -93,17 +94,14 @@ async def revoke(user_id: int, jti: str) -> None:
     Args:
         user_id: 关联的用户 ID
         jti: JWT 唯一标识符
-
-    Returns:
-        是否成功撤销（令牌存在时返回 True）
     """
     r = await redis_util.get()
-    key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+    token_key = TOKEN_KEY.format(user_id=user_id, jti=jti)
     # 检查令牌是否存在
-    data = await r.get(key)
+    data = await r.get(token_key)
     if data:
         # 删除令牌
-        await r.delete(key)
+        await r.delete(token_key)
         # 从索引中移除
         await r.zrem(INDEX_KEY.format(user_id=user_id), jti)
 
@@ -145,7 +143,7 @@ async def get(user_id: int, jti: str) -> dict | None:
         令牌数据字典，如果令牌不存在则返回 None
     """
     r = await redis_util.get()
-    key = TOKEN_KEY.format(user_id=user_id, jti=jti)
-    data = await r.get(key)
+    token_key = TOKEN_KEY.format(user_id=user_id, jti=jti)
+    data = await r.get(token_key)
     if data:
         return json.loads(data)

@@ -76,16 +76,11 @@ async def api_register(
     await email_code_service.verify_email_code(body.email, "register", body.code)
     # 将用户加入数据库
     user = await user_repo.create(db_session, body.email, body.username, body.password)
-    # 获取用户信息
-    user = await user_repo.get_by_id_with_group_scope(db_session, user.id)
-    # 检查用户是否存在
-    if not user:
-        raise user_error.UserNotFoundError  # 用户不存在
     # 设置 user_id 到 ContextVar
     context.user_id_ctx.set(str(user.id))
     logger.info("User register")
     # 创建并设置令牌
-    await _create_and_set_token(user.id, response)
+    await _create_and_set_token(db_session, user.id, response)
 
 
 @router.post("/login")
@@ -103,10 +98,6 @@ async def api_login(
     # 设置 user_id 到 ContextVar
     context.user_id_ctx.set(str(user.id))
     logger.info("User login")
-    # 获取权限信息
-    scopes = list(
-        {s.name for g in user.group if g.yn == 1 for s in g.scope if s.yn == 1}
-    )
     # 检查用户是否被禁用
     if not user.yn:
         raise user_error.UserDisabledError  # 用户被禁用
@@ -114,7 +105,7 @@ async def api_login(
     if not user_service.verify_password(user, body.password):
         raise user_error.InvalidCredentialsError  # 邮箱或密码错误
     # 创建并设置令牌
-    await _create_and_set_token(user.id, response)
+    await _create_and_set_token(db_session, user.id, response)
 
 
 @router.get("/me")
@@ -195,14 +186,10 @@ async def api_update_email(
     # 更新邮箱
     await user_repo.update(db_session, user, email=body.email)
     # 撤销用户所有刷新令牌
-    await token_repo.revoke_all(db_session, payload.sub)
+    await token_repo.revoke_all(payload.sub)
     logger.info("User email updated, all refresh tokens revoked")
-    # 获取权限信息
-    scopes = list(
-        {s.name for g in user.group if g.yn == 1 for s in g.scope if s.yn == 1}
-    )
     # 创建并设置令牌
-    await _create_and_set_token(user.id, response)
+    await _create_and_set_token(db_session, user.id, response)
 
 
 @router.post("/me/password")
@@ -231,19 +218,14 @@ async def api_update_password(
     # 更新密码
     await user_repo.update(db_session, user, password=body.password)
     # 撤销用户所有刷新令牌
-    await token_repo.revoke_all(db_session, payload.sub)
+    await token_repo.revoke_all(payload.sub)
     logger.info("User password updated, all refresh tokens revoked")
-    # 获取权限信息
-    scopes = list(
-        {s.name for g in user.group if g.yn == 1 for s in g.scope if s.yn == 1}
-    )
     # 创建并设置令牌
-    await _create_and_set_token(user.id, response)
+    await _create_and_set_token(db_session, user.id, response)
 
 
 @router.post("/logout")
 async def api_logout(
-    db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
     payload: Annotated[
         token_schema.AccessTokenPayload,
         Depends(token_service.authenticate_access_token),
@@ -251,8 +233,8 @@ async def api_logout(
 ) -> None:
     """登出"""
     logger.info("Logout")
-    # 撤销旧的刷新令牌
-    await token_repo.revoke(db_session, payload.jti, payload.sub)
+    # 撤销刷新令牌
+    await token_repo.revoke(payload.sub, payload.jti)
 
 
 @router.post("/verify_access_token")

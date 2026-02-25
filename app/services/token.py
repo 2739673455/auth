@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Annotated
 
 import jwt
-from fastapi import Cookie, Depends
+from fastapi import Cookie
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +28,6 @@ async def create_access_token(db_session: AsyncSession, user_id: int) -> str:
         "sub": str(user_id),
         "exp": expire.timestamp(),
         "jti": jti,
-        "typ": "access",
     }
     token = jwt.encode(payload, CFG.auth.secret_key, CFG.auth.algorithm)
 
@@ -51,31 +50,26 @@ async def create_access_token(db_session: AsyncSession, user_id: int) -> str:
     return token
 
 
-def _decode_access_token(
+async def authenticate_access_token(
     access_token: Annotated[str, Cookie()],  # 从 Cookie 获取 access_token
 ) -> token_schema.AccessTokenPayload:
-    """解析访问令牌"""
+    """验证访问令牌"""
+    # 解析访问令牌
     try:
         payload = jwt.decode(access_token, CFG.auth.secret_key, [CFG.auth.algorithm])
         payload = token_schema.AccessTokenPayload(**payload)
-        if payload.typ != "access":
-            raise auth_error.InvalidAccessTokenError  # token 类型不正确
-        return payload
     except jwt.ExpiredSignatureError:
         raise auth_error.ExpiredAccessTokenError  # 访问令牌过期
     except jwt.exceptions.InvalidTokenError or ValidationError:
         raise auth_error.InvalidAccessTokenError  # 访问令牌无效
 
-
-async def authenticate_access_token(
-    payload: Annotated[token_schema.AccessTokenPayload, Depends(_decode_access_token)],
-):
-    """验证访问令牌"""
     # 设置 user_id 到 ContextVar
     context.user_id_ctx.set(str(payload.sub))
 
     # 验证访问令牌是否存在
     data = await token_repo.get(int(payload.sub), payload.jti)
-    if not data:
+    if data is None:
         raise auth_error.InvalidAccessTokenError  # 访问令牌不存在
-    return data
+    payload.scope = data["scope"]
+
+    return payload

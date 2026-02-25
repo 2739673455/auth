@@ -38,7 +38,7 @@ async def admin_token(async_test_client: AsyncClient) -> str:
         json={"email": CFG.admin.email, "password": CFG.admin.password},
     )
     assert response.status_code == 200
-    return response.json()["access_token"]
+    return response.cookies["access_token"]
 
 
 @pytest_asyncio.fixture

@@ -11,3 +11,8 @@ class InvalidAccessTokenError(AuthError):
 class ExpiredAccessTokenError(AuthError):
     code = 1202
     message = "访问令牌过期"
+
+
+class InsufficientPermissionsError(AuthError):
+    code = 1203
+    message = "权限不足"

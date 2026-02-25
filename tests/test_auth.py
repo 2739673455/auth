@@ -1,16 +1,11 @@
 """认证API测试"""
 
 import asyncio
-from datetime import datetime, timezone
 
 import pytest
 from faker import Faker
-from sqlalchemy import and_, desc, select
 
-from app.config import CFG
-from app.entities.auth import EmailCode
-from app.utils import db
-from tests.conftest import db_mock
+from app.repositories import email_code as email_code_repo
 
 fake = Faker("zh_CN")
 
@@ -21,27 +16,11 @@ def gen_test_user() -> dict:
 
 
 async def _get_latest_verification_code(email: str, code_type: str) -> str:
-    """从数据库获取最新生成的验证码"""
-    # 使用 get_db 创建新会话（解决事务隔离问题）
-    async for db_session in db.get_db(db_mock.db_name, db_mock.db_url, CFG.db.driver)():
-        stmt = (
-            select(EmailCode)
-            .where(
-                and_(
-                    EmailCode.email == email,
-                    EmailCode.type == code_type,
-                    EmailCode.used == 0,
-                    EmailCode.expire_at > datetime.now(timezone.utc),
-                )
-            )
-            .order_by(desc(EmailCode.create_at))
-        )
-        result = await db_session.execute(stmt)
-        email_code = result.scalar_one_or_none()
-        if not email_code:
-            raise ValueError(f"未找到验证码: email={email}, type={code_type}")
-        return email_code.code
-    raise RuntimeError("无法获取数据库会话")
+    """从 Redis 获取验证码"""
+    code = await email_code_repo.get(email, code_type)
+    if not code:
+        raise ValueError(f"未找到验证码: email={email}, type={code_type}")
+    return code
 
 
 class TestAuthAPIBasic:
@@ -99,9 +78,7 @@ class TestAuthAPIBasic:
             },
         )
         assert response.status_code == 200
-        data = response.json()
-        assert "access_token" in data
-        assert "refresh_token" in data
+        assert "access_token" in response.cookies
 
     @pytest.mark.asyncio
     async def test_register_wrong_code(self, async_test_client):
@@ -184,7 +161,7 @@ class TestAuthAPIBasic:
             json={"email": user_data["email"], "password": user_data["password"]},
         )
         assert response.status_code == 200
-        assert "access_token" in response.json()
+        assert "access_token" in response.cookies
 
     @pytest.mark.asyncio
     async def test_login_nonexistent_user(self, async_test_client):
@@ -245,7 +222,7 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.json()["access_token"]
+        access_token = register_response.cookies["access_token"]
 
         # 修改用户名
         new_username = fake.name()
@@ -253,7 +230,7 @@ class TestAuthAPIBasic:
         response = await async_test_client.post(
             "/api/me/username", json={"username": new_username}, headers=headers
         )
-        assert response.status_code == 202
+        assert response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_update_username_same(self, async_test_client):
@@ -276,7 +253,7 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.json()["access_token"]
+        access_token = register_response.cookies["access_token"]
 
         # 修改为相同用户名应失败
         headers = {"Authorization": f"Bearer {access_token}"}
@@ -309,7 +286,7 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        refresh_token = register_response.json()["refresh_token"]
+        access_token = register_response.cookies["access_token"]
 
         # 准备：发送修改邮箱验证码
         new_email = fake.email()
@@ -320,12 +297,12 @@ class TestAuthAPIBasic:
         reset_email_code = await _get_latest_verification_code(new_email, "reset_email")
 
         # 修改邮箱
-        async_test_client.cookies.set("refresh_token", refresh_token)
+        async_test_client.cookies.set("access_token", access_token)
         response = await async_test_client.post(
             "/api/me/email", json={"email": new_email, "code": reset_email_code}
         )
-        assert response.status_code == 202
-        assert "access_token" in response.json()
+        assert response.status_code == 200
+        assert "access_token" in response.cookies
 
     # ==================== 修改密码 ====================
     @pytest.mark.asyncio
@@ -349,7 +326,7 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        refresh_token = register_response.json()["refresh_token"]
+        access_token = register_response.cookies["access_token"]
 
         # 准备：发送修改密码验证码
         await async_test_client.post(
@@ -362,11 +339,11 @@ class TestAuthAPIBasic:
 
         # 修改密码
         new_password = fake.password()
-        async_test_client.cookies.set("refresh_token", refresh_token)
+        async_test_client.cookies.set("access_token", access_token)
         response = await async_test_client.post(
             "/api/me/password", json={"password": new_password, "code": reset_code}
         )
-        assert response.status_code == 202
+        assert response.status_code == 200
 
         # 验证：使用新密码登录
         login_response = await async_test_client.post(
@@ -395,7 +372,7 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        refresh_token = register_response.json()["refresh_token"]
+        access_token = register_response.cookies["access_token"]
 
         # 准备：发送修改密码验证码
         await async_test_client.post(
@@ -407,7 +384,7 @@ class TestAuthAPIBasic:
         )
 
         # 修改为相同密码应失败
-        async_test_client.cookies.set("refresh_token", refresh_token)
+        async_test_client.cookies.set("access_token", access_token)
         response = await async_test_client.post(
             "/api/me/password",
             json={"password": user_data["password"], "code": reset_code},
@@ -436,43 +413,13 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.json()["access_token"]
+        access_token = register_response.cookies["access_token"]
 
         # 获取用户信息
         headers = {"Authorization": f"Bearer {access_token}"}
         response = await async_test_client.get("/api/me", headers=headers)
         assert response.status_code == 200
         assert response.json()["email"] == user_data["email"]
-
-    # ==================== 刷新令牌 ====================
-    @pytest.mark.asyncio
-    async def test_refresh_token(self, async_test_client):
-        """测试刷新令牌"""
-        user_data = gen_test_user()
-
-        # 准备：注册用户
-        await async_test_client.post(
-            "/api/send_email_code",
-            json={"email": user_data["email"], "type": "register"},
-        )
-        code = await _get_latest_verification_code(user_data["email"], "register")
-
-        register_response = await async_test_client.post(
-            "/api/register",
-            json={
-                "email": user_data["email"],
-                "code": code,
-                "username": user_data["username"],
-                "password": user_data["password"],
-            },
-        )
-        refresh_token = register_response.json()["refresh_token"]
-
-        # 刷新令牌
-        async_test_client.cookies.set("refresh_token", refresh_token)
-        response = await async_test_client.post("/api/refresh")
-        assert response.status_code == 200
-        assert "access_token" in response.json()
 
     # ==================== 登出 ====================
     @pytest.mark.asyncio
@@ -496,10 +443,10 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        refresh_token = register_response.json()["refresh_token"]
+        access_token = register_response.cookies["access_token"]
 
         # 登出
-        async_test_client.cookies.set("refresh_token", refresh_token)
+        async_test_client.cookies.set("access_token", access_token)
         response = await async_test_client.post("/api/logout")
         assert response.status_code == 200
 
@@ -537,5 +484,5 @@ class TestAuthAPIConcurrent:
             )
 
         responses = await asyncio.gather(*[login() for _ in range(10)])
-        tokens = [r.json()["access_token"] for r in responses]
+        tokens = [r.cookies["access_token"] for r in responses]
         assert len(set(tokens)) == 10

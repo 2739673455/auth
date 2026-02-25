@@ -13,6 +13,7 @@ from app.config import CFG
 from app.init_db import prepare
 from app.main import app, create_admin_user
 from app.utils import db
+from app.utils import redis as redis_util
 
 
 class DBMock:
@@ -48,12 +49,18 @@ async def setup_test_database():
     yield
 
     await db_mock.clean()
+    # 关闭 Redis 连接
+    await redis_util.close()
 
 
 @pytest_asyncio.fixture
 async def override_get_db() -> AsyncGenerator[None, None]:
     """覆盖数据库依赖以使用测试数据库"""
+
     await db.close_all()
+    # 重置 Redis 连接，确保每个测试使用新的事件循环
+    await redis_util.close()
+
     test_get_auth_db = db.get_db(db_mock.db_name, db_mock.db_url, CFG.db.driver)
     app.dependency_overrides[db.get_auth_db] = test_get_auth_db
 
@@ -61,6 +68,7 @@ async def override_get_db() -> AsyncGenerator[None, None]:
 
     app.dependency_overrides.clear()
     await db.close_all()
+    await redis_util.close()
 
 
 @pytest_asyncio.fixture

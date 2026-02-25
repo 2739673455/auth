@@ -9,23 +9,6 @@ class Base(DeclarativeBase):
     pass
 
 
-class EmailCode(Base):
-    __tablename__ = 'email_code'
-    __table_args__ = (
-        Index('idx_email_code_email', 'email'),
-        Index('idx_email_code_expire_at', 'expire_at'),
-        {'comment': '邮箱验证码'}
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, comment='ID')
-    email: Mapped[str] = mapped_column(String(100), nullable=False, comment='邮箱')
-    code: Mapped[str] = mapped_column(String(10), nullable=False, comment='验证码')
-    type: Mapped[str] = mapped_column(String(20), nullable=False, comment='类型：register-注册, reset_email-重置邮箱, reset_password-重置密码')
-    expire_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, comment='过期时间')
-    used: Mapped[int] = mapped_column(TINYINT, nullable=False, server_default=text("'0'"), comment='是否已使用')
-    create_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, server_default=text('CURRENT_TIMESTAMP'), comment='创建时间')
-
-
 class Group(Base):
     __tablename__ = 'group'
     __table_args__ = (
@@ -74,7 +57,6 @@ class User(Base):
     update_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='更新时间')
 
     group: Mapped[list['Group']] = relationship('Group', secondary='group_user_rel', back_populates='user')
-    refresh_token: Mapped[list['RefreshToken']] = relationship('RefreshToken', back_populates='user')
 
 
 t_group_scope_rel = Table(
@@ -97,20 +79,3 @@ t_group_user_rel = Table(
     Index('user_id', 'user_id'),
     comment='组-用户关系'
 )
-
-
-class RefreshToken(Base):
-    __tablename__ = 'refresh_token'
-    __table_args__ = (
-        ForeignKeyConstraint(['user_id'], ['user.id'], ondelete='CASCADE', name='refresh_token_ibfk_1'),
-        Index('idx_refresh_token_user_id', 'user_id'),
-        {'comment': '刷新令牌'}
-    )
-
-    jti: Mapped[str] = mapped_column(String(255), primary_key=True, comment='JWT唯一标识')
-    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, comment='用户ID')
-    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, comment='过期时间')
-    yn: Mapped[int] = mapped_column(TINYINT, nullable=False, server_default=text("'1'"), comment='是否启用')
-    create_at: Mapped[Optional[datetime.datetime]] = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP'), comment='创建时间')
-
-    user: Mapped['User'] = relationship('User', back_populates='refresh_token')
