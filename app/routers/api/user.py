@@ -18,21 +18,12 @@ from app.utils.log import logger
 
 router = APIRouter(tags=["user"])
 
-
-async def _create_and_set_token(
-    db_session: AsyncSession, user_id: int, response: Response
-):
-    """创建并设置令牌"""
-    # 创建访问令牌
-    token = await token_service.create_access_token(db_session, user_id)
-    # 在 Cookie 中设置 access_token
-    response.set_cookie(
-        key="access_token",  # Cookie 名称，用于存储访问令牌
-        value=token,  # 从 JWT 创建的访问令牌值
-        httponly=True,  # 防止 JavaScript 访问 Cookie
-        secure=False,  # 在 HTTP 和 HTTPS 下都可以发送
-        samesite="lax",  # 防止 CSRF 攻击，允许跨站 GET 请求时发送 Cookie
-    )
+# Cookie 配置
+COOKIE_OPTIONS = {
+    "httponly": True,
+    "secure": False,
+    "samesite": "lax",
+}
 
 
 @router.post("/send_email_code")
@@ -79,8 +70,9 @@ async def api_register(
     # 设置 user_id 到 ContextVar
     context.user_id_ctx.set(str(user.id))
     logger.info("Register")
-    # 创建并设置令牌
-    await _create_and_set_token(db_session, user.id, response)
+    # 创建访问令牌并设置到 Cookie
+    token = await token_service.create_access_token(db_session, user.id)
+    response.set_cookie(key="access_token", value=token, **COOKIE_OPTIONS)
 
 
 @router.post("/login")
@@ -104,8 +96,9 @@ async def api_login(
     # 验证密码
     if not user_service.verify_password(user, body.password):
         raise user_error.InvalidCredentialsError  # 邮箱或密码错误
-    # 创建并设置令牌
-    await _create_and_set_token(db_session, user.id, response)
+    # 创建访问令牌并设置到 Cookie
+    token = await token_service.create_access_token(db_session, user.id)
+    response.set_cookie(key="access_token", value=token, **COOKIE_OPTIONS)
 
 
 @router.get("/me")
@@ -185,11 +178,12 @@ async def api_update_email(
         raise user_error.EmailAlreadyExistsError  # 邮箱已注册
     # 更新邮箱
     await user_repo.update(db_session, user, email=body.email)
-    # 撤销用户所有刷新令牌
+    # 撤销用户所有访问令牌
     await token_repo.revoke_all(payload.sub)
     logger.info("User email updated, all refresh tokens revoked")
-    # 创建并设置令牌
-    await _create_and_set_token(db_session, user.id, response)
+    # 创建访问令牌并设置到 Cookie
+    token = await token_service.create_access_token(db_session, user.id)
+    response.set_cookie(key="access_token", value=token, **COOKIE_OPTIONS)
 
 
 @router.post("/update_password")
@@ -214,13 +208,14 @@ async def api_update_password(
     await email_code_service.verify_email_code(body.email, "reset_password", body.code)
     # 更新密码
     await user_repo.update(db_session, user, password=body.password)
-    # 撤销用户所有刷新令牌
+    # 撤销用户所有访问令牌
     await token_repo.revoke_all(user.id)
     logger.info("User password updated, all refresh tokens revoked")
 
 
 @router.post("/logout")
 async def api_logout(
+    response: Response,
     payload: Annotated[
         token_schema.AccessTokenPayload,
         Depends(token_service.authenticate_access_token),
@@ -228,8 +223,10 @@ async def api_logout(
 ) -> None:
     """登出"""
     logger.info("Logout")
-    # 撤销刷新令牌
+    # 撤销访问令牌
     await token_repo.revoke(payload.sub, payload.jti)
+    # 清除 access_token cookie
+    response.delete_cookie(key="access_token", **COOKIE_OPTIONS)
 
 
 @router.get("/verify_access_token")
