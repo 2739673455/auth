@@ -1,6 +1,23 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
+class SendCodeRequest(BaseModel):
+    email: EmailStr = Field(..., description="邮箱")
+    type: str = Field(
+        default="register",
+        description="验证码类型：register-注册, reset_email-重置邮箱, reset_password-重置密码",
+    )
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        if v not in ("register", "reset_email", "reset_password"):
+            raise ValueError(
+                "Email code 类型只能为 register/reset_email/reset_password"
+            )
+        return v
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., description="邮箱")
     code: str = Field(..., description="邮箱验证码")
@@ -102,20 +119,3 @@ class UserResponse(BaseModel):
     username: str = Field(..., description="用户名")
     email: str = Field(..., description="邮箱")
     groups: list[str] = Field(..., description="用户组")
-
-
-class SendCodeRequest(BaseModel):
-    email: EmailStr = Field(..., description="邮箱")
-    type: str = Field(
-        default="register",
-        description="验证码类型：register-注册, reset_email-重置邮箱, reset_password-重置密码",
-    )
-
-    @field_validator("type")
-    @classmethod
-    def validate_type(cls, v: str) -> str:
-        if v not in ("register", "reset_email", "reset_password"):
-            raise ValueError(
-                "Email code 类型只能为 register/reset_email/reset_password"
-            )
-        return v

@@ -38,7 +38,7 @@ async def middleware(request: Request, call_next: Callable) -> Response:
         context.status_ctx.set("processing")  # 设置 status 到 ContextVar
         response = await call_next(request)  # 执行请求
     except Exception as e:
-        error = str(e)
+        error = e
         raise
     finally:
         context.response_time_ms_ctx.set(
