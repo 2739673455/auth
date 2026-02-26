@@ -131,7 +131,7 @@ async def api_me(
     return user_schema.UserResponse(username=user.name, email=user.email, groups=groups)
 
 
-@router.post("/me/username")
+@router.post("/update_username")
 async def api_update_username(
     body: user_schema.UpdateUsernameRequest,
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
@@ -157,7 +157,7 @@ async def api_update_username(
     await user_repo.update(db_session, user, username=body.username)
 
 
-@router.post("/me/email")
+@router.post("/update_email")
 async def api_update_email(
     body: user_schema.UpdateEmailRequest,
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
@@ -192,33 +192,30 @@ async def api_update_email(
     await _create_and_set_token(db_session, user.id, response)
 
 
-@router.post("/me/password")
+@router.post("/update_password")
 async def api_update_password(
     body: user_schema.UpdatePasswordRequest,
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
-    payload: Annotated[
-        token_schema.AccessTokenPayload,
-        Depends(token_service.authenticate_access_token),
-    ],
     response: Response,
 ) -> None:
-    """修改密码"""
-    logger.info("User update password")
+    """修改密码（通过邮箱验证码重置，无需登录）"""
     # 获取用户信息
-    user = await user_repo.get_by_id_with_group_scope(db_session, payload.sub)
+    user = await user_repo.get_by_email(db_session, body.email)
     # 检查用户是否存在
     if not user:
         raise user_error.UserNotFoundError  # 用户不存在
+    # 设置 user_id 到 ContextVar
+    context.user_id_ctx.set(str(user.id))
+    logger.info("User Update password")
     # 检查用户是否被禁用
     if not user.yn:
         raise user_error.UserDisabledError  # 用户被禁用
-    # 检查密码是否和原密码相同
-    if user_service.verify_password(user, body.password):
-        raise user_error.UserPasswordSameError  # 密码与原密码相同
+    # 验证邮箱验证码
+    await email_code_service.verify_email_code(body.email, "reset_password", body.code)
     # 更新密码
     await user_repo.update(db_session, user, password=body.password)
     # 撤销用户所有刷新令牌
-    await token_repo.revoke_all(payload.sub)
+    await token_repo.revoke_all(user.id)
     logger.info("User password updated, all refresh tokens revoked")
     # 创建并设置令牌
     await _create_and_set_token(db_session, user.id, response)

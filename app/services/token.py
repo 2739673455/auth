@@ -46,9 +46,13 @@ async def create_access_token(db_session: AsyncSession, user_id: int) -> str:
 
 
 async def authenticate_access_token(
-    access_token: Annotated[str, Cookie()],  # 从 Cookie 获取 access_token
+    access_token: Annotated[str | None, Cookie()] = None,  # 从 Cookie 获取 access_token
 ) -> token_schema.AccessTokenPayload:
     """验证访问令牌"""
+    # 检查是否提供了 token
+    if not access_token:
+        raise auth_error.InvalidAccessTokenError  # 缺少访问令牌
+
     # 解析访问令牌
     try:
         payload = jwt.decode(access_token, CFG.auth.secret_key, [CFG.auth.algorithm])
@@ -82,6 +86,9 @@ async def update_users_tokens(db_session: AsyncSession, user_ids: set[int]) -> N
     """
     for user_id in user_ids:
         user = await user_repo.get_by_id_with_group_scope(db_session, user_id)
-        if user and user.group:
-            scopes = list({s.name for g in user.group if g.yn for s in g.scope if s.yn})
-            await token_repo.update_all(user_id, scopes)
+        scopes = (
+            list({s.name for g in user.group if g.yn for s in g.scope if s.yn})
+            if user and user.group
+            else []
+        )
+        await token_repo.update_all(user_id, scopes)

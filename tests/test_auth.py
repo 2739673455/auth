@@ -43,9 +43,10 @@ class TestAuthAPIBasic:
     @pytest.mark.asyncio
     async def test_send_code_success(self, async_test_client):
         """测试发送验证码成功"""
+        user_data = gen_test_user()
         response = await async_test_client.post(
             "/api/send_email_code",
-            json={"email": fake.email(), "type": "register"},
+            json={"email": user_data["email"], "type": "register"},
         )
         assert response.status_code == 200
 
@@ -172,8 +173,10 @@ class TestAuthAPIBasic:
     @pytest.mark.asyncio
     async def test_login_nonexistent_user(self, async_test_client):
         """测试登录不存在的用户"""
+        user_data = gen_test_user()
         response = await async_test_client.post(
-            "/api/login", json={"email": fake.email(), "password": fake.password()}
+            "/api/login",
+            json={"email": user_data["email"], "password": user_data["password"]},
         )
         assert response.status_code == 404
 
@@ -204,7 +207,7 @@ class TestAuthAPIBasic:
             "/api/login",
             json={"email": user_data["email"], "password": "wrongpassword"},
         )
-        assert response.status_code == 401
+        assert response.status_code == 400
 
     # ==================== 修改用户名 ====================
     @pytest.mark.asyncio
@@ -219,7 +222,7 @@ class TestAuthAPIBasic:
         )
         code = await _get_latest_verification_code(user_data["email"], "register")
 
-        register_response = await async_test_client.post(
+        await async_test_client.post(
             "/api/register",
             json={
                 "email": user_data["email"],
@@ -228,13 +231,11 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.cookies["access_token"]
 
         # 修改用户名
-        new_username = fake.name()
-        headers = {"Authorization": f"Bearer {access_token}"}
+        new_username = gen_test_user()["username"]
         response = await async_test_client.post(
-            "/api/me/username", json={"username": new_username}, headers=headers
+            "/api/update_username", json={"username": new_username}
         )
         assert response.status_code == 200
 
@@ -250,7 +251,7 @@ class TestAuthAPIBasic:
         )
         code = await _get_latest_verification_code(user_data["email"], "register")
 
-        register_response = await async_test_client.post(
+        await async_test_client.post(
             "/api/register",
             json={
                 "email": user_data["email"],
@@ -259,14 +260,11 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.cookies["access_token"]
 
         # 修改为相同用户名应失败
-        headers = {"Authorization": f"Bearer {access_token}"}
         response = await async_test_client.post(
-            "/api/me/username",
+            "/api/update_username",
             json={"username": user_data["username"]},
-            headers=headers,
         )
         assert response.status_code == 400
 
@@ -283,7 +281,7 @@ class TestAuthAPIBasic:
         )
         code = await _get_latest_verification_code(user_data["email"], "register")
 
-        register_response = await async_test_client.post(
+        await async_test_client.post(
             "/api/register",
             json={
                 "email": user_data["email"],
@@ -292,10 +290,10 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.cookies["access_token"]
 
         # 准备：发送修改邮箱验证码
-        new_email = fake.email()
+        new_user = gen_test_user()
+        new_email = new_user["email"]
         await async_test_client.post(
             "/api/send_email_code",
             json={"email": new_email, "type": "reset_email"},
@@ -303,17 +301,15 @@ class TestAuthAPIBasic:
         reset_email_code = await _get_latest_verification_code(new_email, "reset_email")
 
         # 修改邮箱
-        async_test_client.cookies.set("access_token", access_token)
         response = await async_test_client.post(
-            "/api/me/email", json={"email": new_email, "code": reset_email_code}
+            "/api/update_email", json={"email": new_email, "code": reset_email_code}
         )
         assert response.status_code == 200
         assert "access_token" in response.cookies
 
-    # ==================== 修改密码 ====================
     @pytest.mark.asyncio
-    async def test_update_password(self, async_test_client):
-        """测试修改密码"""
+    async def test_update_email_send_code_to_same_email(self, async_test_client):
+        """测试发送验证码到当前邮箱（相同邮箱）"""
         user_data = gen_test_user()
 
         # 准备：注册用户
@@ -323,7 +319,7 @@ class TestAuthAPIBasic:
         )
         code = await _get_latest_verification_code(user_data["email"], "register")
 
-        register_response = await async_test_client.post(
+        await async_test_client.post(
             "/api/register",
             json={
                 "email": user_data["email"],
@@ -332,7 +328,80 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.cookies["access_token"]
+
+        # 发送修改邮箱验证码到当前邮箱应失败（邮箱已注册）
+        response = await async_test_client.post(
+            "/api/send_email_code",
+            json={"email": user_data["email"], "type": "reset_email"},
+        )
+        assert response.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_update_email_send_code_to_duplicate(self, async_test_client):
+        """测试发送验证码到已注册的邮箱"""
+        user_data1 = gen_test_user()
+        user_data2 = gen_test_user()
+
+        # 准备：注册两个用户
+        await async_test_client.post(
+            "/api/send_email_code",
+            json={"email": user_data1["email"], "type": "register"},
+        )
+        code1 = await _get_latest_verification_code(user_data1["email"], "register")
+        await async_test_client.post(
+            "/api/register",
+            json={
+                "email": user_data1["email"],
+                "code": code1,
+                "username": user_data1["username"],
+                "password": user_data1["password"],
+            },
+        )
+
+        await async_test_client.post(
+            "/api/send_email_code",
+            json={"email": user_data2["email"], "type": "register"},
+        )
+        code2 = await _get_latest_verification_code(user_data2["email"], "register")
+        await async_test_client.post(
+            "/api/register",
+            json={
+                "email": user_data2["email"],
+                "code": code2,
+                "username": user_data2["username"],
+                "password": user_data2["password"],
+            },
+        )
+
+        # 用户2尝试发送修改邮箱验证码到用户1的邮箱应失败
+        response = await async_test_client.post(
+            "/api/send_email_code",
+            json={"email": user_data1["email"], "type": "reset_email"},
+        )
+        assert response.status_code == 409
+
+    # ==================== 修改密码 ====================
+    @pytest.mark.asyncio
+    async def test_update_password(self, async_test_client):
+        """测试通过邮箱验证码修改密码"""
+        user_data = gen_test_user()
+
+        # 准备：注册用户
+        await async_test_client.post(
+            "/api/send_email_code",
+            json={"email": user_data["email"], "type": "register"},
+        )
+        code = await _get_latest_verification_code(user_data["email"], "register")
+
+        await async_test_client.post(
+            "/api/register",
+            json={
+                "email": user_data["email"],
+                "code": code,
+                "username": user_data["username"],
+                "password": user_data["password"],
+            },
+        )
 
         # 准备：发送修改密码验证码
         await async_test_client.post(
@@ -343,13 +412,19 @@ class TestAuthAPIBasic:
             user_data["email"], "reset_password"
         )
 
-        # 修改密码
-        new_password = fake.password()
-        async_test_client.cookies.set("access_token", access_token)
+        # 修改密码（无需登录）
+        new_user = gen_test_user()
+        new_password = new_user["password"]
         response = await async_test_client.post(
-            "/api/me/password", json={"password": new_password, "code": reset_code}
+            "/api/update_password",
+            json={
+                "email": user_data["email"],
+                "code": reset_code,
+                "password": new_password,
+            },
         )
         assert response.status_code == 200
+        assert "access_token" in response.cookies
 
         # 验证：使用新密码登录
         login_response = await async_test_client.post(
@@ -358,8 +433,8 @@ class TestAuthAPIBasic:
         assert login_response.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_update_password_same(self, async_test_client):
-        """测试修改为相同密码"""
+    async def test_update_password_invalid_code(self, async_test_client):
+        """测试使用错误验证码修改密码"""
         user_data = gen_test_user()
 
         # 准备：注册用户
@@ -369,7 +444,7 @@ class TestAuthAPIBasic:
         )
         code = await _get_latest_verification_code(user_data["email"], "register")
 
-        register_response = await async_test_client.post(
+        await async_test_client.post(
             "/api/register",
             json={
                 "email": user_data["email"],
@@ -378,24 +453,31 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.cookies["access_token"]
 
-        # 准备：发送修改密码验证码
-        await async_test_client.post(
-            "/api/send_email_code",
-            json={"email": user_data["email"], "type": "reset_password"},
-        )
-        reset_code = await _get_latest_verification_code(
-            user_data["email"], "reset_password"
-        )
-
-        # 修改为相同密码应失败
-        async_test_client.cookies.set("access_token", access_token)
+        # 使用错误验证码修改密码应失败
         response = await async_test_client.post(
-            "/api/me/password",
-            json={"password": user_data["password"], "code": reset_code},
+            "/api/update_password",
+            json={
+                "email": user_data["email"],
+                "code": "000000",
+                "password": gen_test_user()["password"],
+            },
         )
         assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_update_password_nonexistent_email(self, async_test_client):
+        """测试使用不存在邮箱修改密码"""
+        user_data = gen_test_user()
+        response = await async_test_client.post(
+            "/api/update_password",
+            json={
+                "email": user_data["email"],
+                "code": "000000",
+                "password": user_data["password"],
+            },
+        )
+        assert response.status_code == 404
 
     # ==================== 获取用户信息 ====================
     @pytest.mark.asyncio
@@ -410,7 +492,7 @@ class TestAuthAPIBasic:
         )
         code = await _get_latest_verification_code(user_data["email"], "register")
 
-        register_response = await async_test_client.post(
+        await async_test_client.post(
             "/api/register",
             json={
                 "email": user_data["email"],
@@ -419,13 +501,21 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.cookies["access_token"]
 
         # 获取用户信息
-        headers = {"Authorization": f"Bearer {access_token}"}
-        response = await async_test_client.get("/api/me", headers=headers)
+        response = await async_test_client.get("/api/me")
         assert response.status_code == 200
         assert response.json()["email"] == user_data["email"]
+
+    @pytest.mark.asyncio
+    async def test_get_user_info_no_token(self, async_test_client):
+        """测试获取用户信息时未携带令牌"""
+        # 清除所有 cookie
+        async_test_client.cookies.clear()
+
+        # 获取用户信息应失败（未授权）
+        response = await async_test_client.get("/api/me")
+        assert response.status_code == 401
 
     # ==================== 登出 ====================
     @pytest.mark.asyncio
@@ -440,7 +530,7 @@ class TestAuthAPIBasic:
         )
         code = await _get_latest_verification_code(user_data["email"], "register")
 
-        register_response = await async_test_client.post(
+        await async_test_client.post(
             "/api/register",
             json={
                 "email": user_data["email"],
@@ -449,12 +539,40 @@ class TestAuthAPIBasic:
                 "password": user_data["password"],
             },
         )
-        access_token = register_response.cookies["access_token"]
 
         # 登出
-        async_test_client.cookies.set("access_token", access_token)
         response = await async_test_client.post("/api/logout")
         assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_verify_access_token(self, async_test_client):
+        """测试验证访问令牌"""
+        user_data = gen_test_user()
+
+        # 准备：注册用户
+        await async_test_client.post(
+            "/api/send_email_code",
+            json={"email": user_data["email"], "type": "register"},
+        )
+        code = await _get_latest_verification_code(user_data["email"], "register")
+
+        await async_test_client.post(
+            "/api/register",
+            json={
+                "email": user_data["email"],
+                "code": code,
+                "username": user_data["username"],
+                "password": user_data["password"],
+            },
+        )
+
+        # 验证访问令牌
+        response = await async_test_client.post("/api/verify_access_token")
+        assert response.status_code == 200
+        data = response.json()
+        assert "sub" in data
+        assert "scope" in data
+        assert "exp" in data
 
 
 class TestAuthAPIConcurrent:

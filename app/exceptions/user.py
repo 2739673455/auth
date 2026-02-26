@@ -46,11 +46,6 @@ class UserEmailSameError(BadRequestError):
     message = "邮箱与原邮箱相同"
 
 
-class UserPasswordSameError(BadRequestError):
-    code = 2008
-    message = "密码与原密码相同"
-
-
 class InvalidVerifyCodeError(BadRequestError):
-    code = 2009
+    code = 2008
     message = "验证码错误或已过期"

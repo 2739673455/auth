@@ -92,8 +92,9 @@ class UpdateEmailRequest(BaseModel):
 
 
 class UpdatePasswordRequest(BaseModel):
-    password: str = Field(..., description="新密码")
+    email: EmailStr = Field(..., description="邮箱")
     code: str = Field(..., description="邮箱验证码")
+    password: str = Field(..., description="新密码")
 
     @field_validator("code")
     @classmethod
