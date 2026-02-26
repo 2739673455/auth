@@ -19,7 +19,7 @@ import {
   LogoutOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import { authApi } from '../../api/auth';
+import { userApi } from '../../api/user';
 import { useAuthStore } from '../../stores/authStore';
 
 const { Header, Sider, Content } = Layout;
@@ -47,10 +47,10 @@ export default function Profile() {
   const updateUsername = async (values: { username: string }) => {
     setLoading(true);
     try {
-      await authApi.updateUsername(values);
+      await userApi.updateUsername(values);
       message.success('用户名修改成功');
       // 刷新用户信息
-      const response = await authApi.getMe();
+      const response = await userApi.getMe();
       setUser(response.data);
     } catch (error: any) {
       const msg = error.response?.data?.detail || '修改失败';

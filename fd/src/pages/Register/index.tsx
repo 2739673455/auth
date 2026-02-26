@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Card, message, Typography, Statistic } from 'antd';
 import type { StatisticProps } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined, SafetyOutlined } from '@ant-design/icons';
-import { authApi } from '../../api/auth';
+import { userApi } from '../../api/user';
 import { useAuthStore } from '../../stores/authStore';
 import type { RegisterRequest, SendCodeRequest } from '../../types';
 
@@ -21,18 +21,18 @@ export default function Register() {
   const onFinish = async (values: RegisterRequest) => {
     setLoading(true);
     try {
-      const response = await authApi.register(values);
-      const { access_token } = response.data;
+      // 注册（后端会通过 Cookie 设置 token）
+      await userApi.register(values);
 
-      // 验证 token 获取用户信息
-      const verifyResponse = await authApi.verifyAccessToken();
+      // 验证 token 获取权限
+      const verifyResponse = await userApi.verifyAccessToken();
       const { scopes } = verifyResponse.data;
 
       // 获取用户信息
-      const userResponse = await authApi.getMe();
+      const userResponse = await userApi.getMe();
 
       // 注册成功，自动登录
-      login(access_token, userResponse.data, scopes);
+      login(userResponse.data, scopes);
       message.success('注册成功');
       navigate('/profile');
     } catch (error: any) {
@@ -53,7 +53,7 @@ export default function Register() {
     setSendingCode(true);
     try {
       const data: SendCodeRequest = { email, type: 'register' };
-      await authApi.sendEmailCode(data);
+      await userApi.sendEmailCode(data);
       message.success('验证码已发送');
       setCountdown(Date.now() + 60000); // 60秒倒计时
     } catch (error: any) {

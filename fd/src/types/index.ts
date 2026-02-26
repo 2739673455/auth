@@ -11,12 +11,6 @@ export interface RegisterRequest {
   password: string;
 }
 
-export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-}
-
 export interface UserResponse {
   username: string;
   email: string;
@@ -92,28 +86,35 @@ export interface UserDetailResponse extends UserInfo {
 export interface GroupInfo {
   id: number;
   name: string;
-  description: string;
   yn: number;
+  create_at: string;
+}
+
+export interface GroupDetailResponse extends GroupInfo {
+  users: UserInfo[];
+  scopes: ScopeInfo[];
 }
 
 export interface ScopeInfo {
   id: number;
   name: string;
-  description: string;
+  description: string | null;
   yn: number;
+  create_at: string;
+}
+
+export interface ScopeDetailResponse extends ScopeInfo {
+  groups: GroupInfo[];
+  users: UserInfo[];
 }
 
 export interface CreateGroupRequest {
   name: string;
-  description: string;
-  scope_ids: number[];
 }
 
 export interface UpdateGroupRequest {
   group_id: number;
   name?: string;
-  description?: string;
-  scope_ids?: number[];
   yn?: number;
 }
 
@@ -128,7 +129,7 @@ export interface GroupListResponse {
 
 export interface CreateScopeRequest {
   name: string;
-  description: string;
+  description?: string;
 }
 
 export interface UpdateScopeRequest {
@@ -145,4 +146,31 @@ export interface RemoveScopeRequest {
 export interface ScopeListResponse {
   total: number;
   items: ScopeInfo[];
+}
+
+// 关联关系类型
+export interface UserGroupRelation {
+  user_id: number;
+  group_id: number;
+}
+
+export interface GroupScopeRelation {
+  group_id: number;
+  scope_id: number;
+}
+
+export interface BatchAddUserGroupRequest {
+  relations: UserGroupRelation[];
+}
+
+export interface BatchRemoveUserGroupRequest {
+  relations: UserGroupRelation[];
+}
+
+export interface BatchAddGroupScopeRequest {
+  relations: GroupScopeRelation[];
+}
+
+export interface BatchRemoveGroupScopeRequest {
+  relations: GroupScopeRelation[];
 }

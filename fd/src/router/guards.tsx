@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 
@@ -8,9 +9,16 @@ interface ProtectedRouteProps {
 // 需要登录的路由守卫
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const accessToken = useAuthStore((state) => state.accessToken);
+  const checkAuth = useAuthStore((state) => state.checkAuth);
 
-  if (!isAuthenticated && !accessToken) {
+  useEffect(() => {
+    if (!isAuthenticated) {
+      checkAuth();
+    }
+  }, [isAuthenticated, checkAuth]);
+
+  // 未认证时显示 loading 或跳转
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
@@ -20,10 +28,16 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 // 管理员路由守卫
 export function AdminRoute({ children }: ProtectedRouteProps) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const accessToken = useAuthStore((state) => state.accessToken);
+  const checkAuth = useAuthStore((state) => state.checkAuth);
   const hasScope = useAuthStore((state) => state.hasScope);
 
-  if (!isAuthenticated && !accessToken) {
+  useEffect(() => {
+    if (!isAuthenticated) {
+      checkAuth();
+    }
+  }, [isAuthenticated, checkAuth]);
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 

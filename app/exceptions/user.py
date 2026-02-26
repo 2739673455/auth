@@ -31,10 +31,9 @@ class UserDisabledError(AppError):
     status_code = 403
 
 
-class InvalidCredentialsError(AppError):
+class InvalidCredentialsError(BadRequestError):
     code = 2005
-    message = "密码错误"
-    status_code = 401
+    message = "邮箱或密码错误"
 
 
 class UserNameSameError(BadRequestError):

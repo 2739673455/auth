@@ -10,11 +10,17 @@ import type {
   RemoveGroupRequest,
   GroupListResponse,
   GroupInfo,
+  GroupDetailResponse,
   CreateScopeRequest,
   UpdateScopeRequest,
   RemoveScopeRequest,
   ScopeListResponse,
   ScopeInfo,
+  ScopeDetailResponse,
+  BatchAddUserGroupRequest,
+  BatchRemoveUserGroupRequest,
+  BatchAddGroupScopeRequest,
+  BatchRemoveGroupScopeRequest,
 } from '../types';
 
 // 用户管理
@@ -64,7 +70,7 @@ export const adminGroupApi = {
 
   // 查询组详情
   getGroup: (groupId: number) =>
-    apiClient.get<GroupInfo>(`/api/admin/group/${groupId}`),
+    apiClient.get<GroupDetailResponse>(`/api/admin/group/${groupId}`),
 };
 
 // 权限管理
@@ -89,5 +95,28 @@ export const adminScopeApi = {
 
   // 查询权限详情
   getScope: (scopeId: number) =>
-    apiClient.get<ScopeInfo>(`/api/admin/scope/${scopeId}`),
+    apiClient.get<ScopeDetailResponse>(`/api/admin/scope/${scopeId}`),
+};
+
+// 关联关系管理
+export const adminRelationApi = {
+  // 批量添加用户-组关联
+  addUserGroup: (data: BatchAddUserGroupRequest) =>
+    apiClient.post<void>('/api/admin/user-group/add', data, {
+      validateStatus: (status) => status === 201 || status < 400,
+    }),
+
+  // 批量移除用户-组关联
+  removeUserGroup: (data: BatchRemoveUserGroupRequest) =>
+    apiClient.post<void>('/api/admin/user-group/remove', data),
+
+  // 批量添加组-权限关联
+  addGroupScope: (data: BatchAddGroupScopeRequest) =>
+    apiClient.post<void>('/api/admin/group-scope/add', data, {
+      validateStatus: (status) => status === 201 || status < 400,
+    }),
+
+  // 批量移除组-权限关联
+  removeGroupScope: (data: BatchRemoveGroupScopeRequest) =>
+    apiClient.post<void>('/api/admin/group-scope/remove', data),
 };

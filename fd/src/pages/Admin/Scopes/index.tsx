@@ -260,7 +260,6 @@ export default function AdminScopes() {
           <Form.Item
             name="description"
             label="描述"
-            rules={[{ required: true, message: '请输入描述' }]}
           >
             <Input.TextArea />
           </Form.Item>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Card, message, Typography } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { authApi } from '../../api/auth';
+import { userApi } from '../../api/user';
 import { useAuthStore } from '../../stores/authStore';
 import type { LoginRequest } from '../../types';
 
@@ -16,18 +16,18 @@ export default function Login() {
   const onFinish = async (values: LoginRequest) => {
     setLoading(true);
     try {
-      const response = await authApi.login(values);
-      const { access_token } = response.data;
+      // 登录（后端会通过 Cookie 设置 token）
+      await userApi.login(values);
 
-      // 验证 token 获取用户信息
-      const verifyResponse = await authApi.verifyAccessToken();
+      // 验证 token 获取权限
+      const verifyResponse = await userApi.verifyAccessToken();
       const { scopes } = verifyResponse.data;
 
       // 获取用户信息
-      const userResponse = await authApi.getMe();
+      const userResponse = await userApi.getMe();
 
       // 登录成功
-      login(access_token, userResponse.data, scopes);
+      login(userResponse.data, scopes);
       message.success('登录成功');
       navigate('/profile');
     } catch (error: any) {

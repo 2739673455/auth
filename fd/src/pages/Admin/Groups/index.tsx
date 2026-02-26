@@ -13,7 +13,6 @@ import {
   Form,
   message,
   Typography,
-  Select,
   Switch,
 } from 'antd';
 import {
@@ -24,8 +23,8 @@ import {
   PlusOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { adminGroupApi, adminScopeApi } from '../../../api/admin';
-import type { GroupInfo, ScopeInfo } from '../../../types';
+import { adminGroupApi } from '../../../api/admin';
+import type { GroupInfo } from '../../../types';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -33,7 +32,6 @@ const { Title } = Typography;
 export default function AdminGroups() {
   const navigate = useNavigate();
   const [groups, setGroups] = useState<GroupInfo[]>([]);
-  const [scopes, setScopes] = useState<ScopeInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [keyword, setKeyword] = useState('');
@@ -61,22 +59,9 @@ export default function AdminGroups() {
     }
   };
 
-  const fetchScopes = async () => {
-    try {
-      const response = await adminScopeApi.listScopes({ offset: 0, limit: 1000 });
-      setScopes(response.data.items);
-    } catch (error) {
-      console.error('获取权限列表失败');
-    }
-  };
-
   useEffect(() => {
     fetchGroups();
   }, [page, pageSize, keyword]);
-
-  useEffect(() => {
-    fetchScopes();
-  }, []);
 
   const handleCreate = async (values: any) => {
     try {
@@ -136,10 +121,6 @@ export default function AdminGroups() {
       dataIndex: 'name',
     },
     {
-      title: '描述',
-      dataIndex: 'description',
-    },
-    {
       title: '状态',
       dataIndex: 'yn',
       render: (yn: number) => (
@@ -157,10 +138,7 @@ export default function AdminGroups() {
             type="link"
             onClick={() => {
               setEditingGroup(record);
-              form.setFieldsValue({
-                ...record,
-                scope_ids: [],
-              });
+              form.setFieldsValue(record);
               setIsModalOpen(true);
             }}
           >
@@ -275,25 +253,6 @@ export default function AdminGroups() {
           >
             <Input disabled={!!editingGroup} />
           </Form.Item>
-          <Form.Item
-            name="description"
-            label="描述"
-            rules={[{ required: true, message: '请输入描述' }]}
-          >
-            <Input.TextArea />
-          </Form.Item>
-          {!editingGroup && (
-            <Form.Item
-              name="scope_ids"
-              label="权限"
-            >
-              <Select
-                mode="multiple"
-                placeholder="选择权限"
-                options={scopes.map((s) => ({ label: s.name, value: s.id }))}
-              />
-            </Form.Item>
-          )}
           {editingGroup && (
             <Form.Item name="yn" label="状态" valuePropName="checked">
               <Switch checkedChildren="正常" unCheckedChildren="禁用" />
