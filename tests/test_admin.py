@@ -1096,7 +1096,7 @@ class TestTokenScopeUpdate:
 
         # 验证初始状态：令牌包含权限（使用用户 token）
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert setup["scope_name"] in verify_response.json()["scope"]
 
@@ -1112,7 +1112,7 @@ class TestTokenScopeUpdate:
 
         # 验证令牌权限已更新：权限应被移除（使用用户 token）
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert setup["scope_name"] not in verify_response.json()["scope"]
 
@@ -1132,7 +1132,7 @@ class TestTokenScopeUpdate:
 
         # 验证权限被移除
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert setup["scope_name"] not in verify_response.json()["scope"]
 
         # 恢复管理员 token
@@ -1147,7 +1147,7 @@ class TestTokenScopeUpdate:
 
         # 验证权限被恢复
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert setup["scope_name"] in verify_response.json()["scope"]
 
@@ -1160,7 +1160,7 @@ class TestTokenScopeUpdate:
 
         # 使用用户 token 验证初始状态：令牌包含权限
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert setup["scope_name"] in verify_response.json()["scope"]
 
         # 恢复管理员 token
@@ -1175,7 +1175,7 @@ class TestTokenScopeUpdate:
 
         # 验证令牌权限已更新：权限应被移除
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert setup["scope_name"] not in verify_response.json()["scope"]
 
@@ -1195,7 +1195,7 @@ class TestTokenScopeUpdate:
 
         # 验证权限被移除
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert setup["scope_name"] not in verify_response.json()["scope"]
 
         # 恢复管理员 token
@@ -1210,7 +1210,7 @@ class TestTokenScopeUpdate:
 
         # 验证权限被恢复
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert setup["scope_name"] in verify_response.json()["scope"]
 
@@ -1269,7 +1269,7 @@ class TestTokenScopeUpdate:
 
         # 验证初始状态：只有第一个权限
         async_test_client.cookies.set("access_token", access_token)
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert scope_name1 in verify_response.json()["scope"]
         assert scope_name2 not in verify_response.json()["scope"]
 
@@ -1288,7 +1288,7 @@ class TestTokenScopeUpdate:
 
         # 验证令牌包含新权限
         async_test_client.cookies.set("access_token", access_token)
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert scope_name1 in verify_response.json()["scope"]
         assert scope_name2 in verify_response.json()["scope"]
@@ -1302,7 +1302,7 @@ class TestTokenScopeUpdate:
 
         # 验证初始状态：令牌包含权限
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert setup["scope_name"] in verify_response.json()["scope"]
 
         # 恢复管理员 token
@@ -1321,7 +1321,7 @@ class TestTokenScopeUpdate:
 
         # 验证令牌权限已更新：权限应被移除
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert setup["scope_name"] not in verify_response.json()["scope"]
 
@@ -1334,7 +1334,7 @@ class TestTokenScopeUpdate:
 
         # 验证初始状态：令牌包含权限
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert setup["scope_name"] in verify_response.json()["scope"]
 
         # 恢复管理员 token
@@ -1353,7 +1353,7 @@ class TestTokenScopeUpdate:
 
         # 验证令牌权限已更新：权限应被移除
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert setup["scope_name"] not in verify_response.json()["scope"]
 
@@ -1403,7 +1403,7 @@ class TestTokenScopeUpdate:
 
         # 验证初始状态：没有权限
         async_test_client.cookies.set("access_token", access_token)
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert scope_name not in verify_response.json()["scope"]
 
         # 恢复管理员 token
@@ -1417,7 +1417,7 @@ class TestTokenScopeUpdate:
 
         # 验证令牌获得权限
         async_test_client.cookies.set("access_token", access_token)
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert scope_name in verify_response.json()["scope"]
 
@@ -1430,7 +1430,7 @@ class TestTokenScopeUpdate:
 
         # 验证初始状态：令牌包含权限
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert setup["scope_name"] in verify_response.json()["scope"]
 
         # 恢复管理员 token
@@ -1445,7 +1445,7 @@ class TestTokenScopeUpdate:
 
         # 验证令牌权限已更新：权限应被移除
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert setup["scope_name"] not in verify_response.json()["scope"]
 
@@ -1458,7 +1458,7 @@ class TestTokenScopeUpdate:
 
         # 验证初始状态：令牌包含权限
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert setup["scope_name"] in verify_response.json()["scope"]
 
         # 恢复管理员 token
@@ -1473,6 +1473,6 @@ class TestTokenScopeUpdate:
 
         # 验证令牌权限已更新：权限应被移除
         async_test_client.cookies.set("access_token", setup["access_token"])
-        verify_response = await async_test_client.post("/api/verify_access_token")
+        verify_response = await async_test_client.get("/api/verify_access_token")
         assert verify_response.status_code == 200
         assert setup["scope_name"] not in verify_response.json()["scope"]

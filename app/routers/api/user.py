@@ -217,8 +217,6 @@ async def api_update_password(
     # 撤销用户所有刷新令牌
     await token_repo.revoke_all(user.id)
     logger.info("User password updated, all refresh tokens revoked")
-    # 创建并设置令牌
-    await _create_and_set_token(db_session, user.id, response)
 
 
 @router.post("/logout")
@@ -234,7 +232,7 @@ async def api_logout(
     await token_repo.revoke(payload.sub, payload.jti)
 
 
-@router.post("/verify_access_token")
+@router.get("/verify_access_token")
 async def api_verify_access_token(
     payload: Annotated[
         token_schema.AccessTokenPayload,

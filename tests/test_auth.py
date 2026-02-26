@@ -424,7 +424,6 @@ class TestAuthAPIBasic:
             },
         )
         assert response.status_code == 200
-        assert "access_token" in response.cookies
 
         # 验证：使用新密码登录
         login_response = await async_test_client.post(
@@ -567,7 +566,7 @@ class TestAuthAPIBasic:
         )
 
         # 验证访问令牌
-        response = await async_test_client.post("/api/verify_access_token")
+        response = await async_test_client.get("/api/verify_access_token")
         assert response.status_code == 200
         data = response.json()
         assert "sub" in data

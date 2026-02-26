@@ -32,8 +32,9 @@ export interface UpdateEmailRequest {
 }
 
 export interface UpdatePasswordRequest {
-  password: string;
+  email: string;
   code: string;
+  password: string;
 }
 
 export interface AccessTokenPayload {

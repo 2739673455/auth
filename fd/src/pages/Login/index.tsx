@@ -91,8 +91,9 @@ export default function Login() {
             </Button>
           </Form.Item>
 
-          <div style={{ textAlign: 'center' }}>
-            还没有账号？ <Link to="/register">立即注册</Link>
+          <div style={{ textAlign: 'center', display: 'flex', justifyContent: 'space-between' }}>
+            <span>还没有账号？ <Link to="/register">立即注册</Link></span>
+            <Link to="/forget_password">忘记密码？</Link>
           </div>
         </Form>
       </Card>

@@ -2,10 +2,9 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { ProtectedRoute, AdminRoute } from './guards';
 import Login from '../pages/Login';
 import Register from '../pages/Register';
+import ForgetPassword from '../pages/ForgetPassword';
 import Profile from '../pages/Profile';
-import AdminUsers from '../pages/Admin/Users';
-import AdminGroups from '../pages/Admin/Groups';
-import AdminScopes from '../pages/Admin/Scopes';
+import AdminPanel from '../pages/Admin';
 
 export const router = createBrowserRouter([
   {
@@ -21,6 +20,10 @@ export const router = createBrowserRouter([
     element: <Register />,
   },
   {
+    path: '/forget_password',
+    element: <ForgetPassword />,
+  },
+  {
     path: '/profile',
     element: (
       <ProtectedRoute>
@@ -29,26 +32,10 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/admin/users',
+    path: '/admin',
     element: (
       <AdminRoute>
-        <AdminUsers />
-      </AdminRoute>
-    ),
-  },
-  {
-    path: '/admin/groups',
-    element: (
-      <AdminRoute>
-        <AdminGroups />
-      </AdminRoute>
-    ),
-  },
-  {
-    path: '/admin/scopes',
-    element: (
-      <AdminRoute>
-        <AdminScopes />
+        <AdminPanel />
       </AdminRoute>
     ),
   },

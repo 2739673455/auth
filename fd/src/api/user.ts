@@ -34,9 +34,9 @@ export const userApi = {
   updateEmail: (data: UpdateEmailRequest) =>
     apiClient.post<void>('/api/me/email', data),
 
-  // 修改密码
+  // 修改密码（通过邮箱验证码重置）
   updatePassword: (data: UpdatePasswordRequest) =>
-    apiClient.post<void>('/api/me/password', data),
+    apiClient.post<void>('/api/update_password', data),
 
   // 登出
   logout: () => apiClient.post<void>('/api/logout'),
