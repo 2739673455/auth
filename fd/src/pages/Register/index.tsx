@@ -26,13 +26,13 @@ export default function Register() {
 
       // 验证 token 获取权限
       const verifyResponse = await userApi.verifyAccessToken();
-      const { scopes } = verifyResponse.data;
+      const { scope } = verifyResponse.data;
 
       // 获取用户信息
       const userResponse = await userApi.getMe();
 
       // 注册成功，自动登录
-      login(userResponse.data, scopes);
+      login(userResponse.data, scope);
       message.success('注册成功');
       navigate('/profile');
     } catch (error: any) {

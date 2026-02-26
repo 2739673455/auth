@@ -28,11 +28,11 @@ export const userApi = {
 
   // 修改用户名
   updateUsername: (data: UpdateUsernameRequest) =>
-    apiClient.post<void>('/api/me/username', data),
+    apiClient.post<void>('/api/update_username', data),
 
   // 修改邮箱
   updateEmail: (data: UpdateEmailRequest) =>
-    apiClient.post<void>('/api/me/email', data),
+    apiClient.post<void>('/api/update_email', data),
 
   // 修改密码（通过邮箱验证码重置）
   updatePassword: (data: UpdatePasswordRequest) =>

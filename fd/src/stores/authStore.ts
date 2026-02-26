@@ -7,10 +7,11 @@ interface AuthState {
   user: UserResponse | null;
   scopes: string[];
   isAuthenticated: boolean;
+  isLoading: boolean;
 
   // 方法
   setUser: (user: UserResponse | null) => void;
-  login: (user: UserResponse, scopes: string[]) => void;
+  login: (user: UserResponse, scope: string[]) => void;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
   hasScope: (scope: string) => boolean;
@@ -22,6 +23,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   scopes: [],
   isAuthenticated: false,
+  isLoading: true,
 
   // 设置用户信息
   setUser: (user) => {
@@ -29,11 +31,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   // 登录
-  login: (user, scopes) => {
+  login: (user, scope) => {
     set({
       user,
-      scopes,
+      scopes: scope,
       isAuthenticated: true,
+      isLoading: false,
     });
   },
 
@@ -48,6 +51,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       user: null,
       scopes: [],
       isAuthenticated: false,
+      isLoading: false,
     });
   },
 
@@ -66,19 +70,20 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   hasScope: (scope) => {
     const { scopes } = get();
     // * 表示全部权限
-    return scopes.includes('*') || scopes.includes(scope);
+    return scopes?.includes('*') || scopes?.includes(scope) || false;
   },
 
   // 检查认证状态（页面加载时调用）
   checkAuth: async () => {
     try {
       const verifyResponse = await userApi.verifyAccessToken();
-      const { scopes } = verifyResponse.data;
+      const { scope } = verifyResponse.data;
       const userResponse = await userApi.getMe();
       set({
         user: userResponse.data,
-        scopes,
+        scopes: scope,
         isAuthenticated: true,
+        isLoading: false,
       });
     } catch {
       // 验证失败，清除状态
@@ -86,6 +91,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         user: null,
         scopes: [],
         isAuthenticated: false,
+        isLoading: false,
       });
     }
   },

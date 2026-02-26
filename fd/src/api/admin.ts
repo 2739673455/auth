@@ -5,6 +5,7 @@ import type {
   RemoveUserRequest,
   UserListResponse,
   UserDetailResponse,
+  UserInfo,
   CreateGroupRequest,
   UpdateGroupRequest,
   RemoveGroupRequest,
@@ -27,7 +28,7 @@ import type {
 export const adminUserApi = {
   // 创建用户
   createUser: (data: CreateUserRequest) =>
-    apiClient.post<UserDetailResponse>('/api/admin/create_user', data, {
+    apiClient.post<UserInfo>('/api/admin/create_user', data, {
       validateStatus: (status) => status === 201 || status < 400,
     }),
 
@@ -58,7 +59,7 @@ export const adminGroupApi = {
 
   // 更新组
   updateGroup: (data: UpdateGroupRequest) =>
-    apiClient.post<void>('/api/admin/update_group', data),
+    apiClient.post<GroupInfo>('/api/admin/update_group', data),
 
   // 删除组
   removeGroup: (data: RemoveGroupRequest) =>
@@ -83,7 +84,7 @@ export const adminScopeApi = {
 
   // 更新权限
   updateScope: (data: UpdateScopeRequest) =>
-    apiClient.post<void>('/api/admin/update_scope', data),
+    apiClient.post<ScopeInfo>('/api/admin/update_scope', data),
 
   // 删除权限
   removeScope: (data: RemoveScopeRequest) =>

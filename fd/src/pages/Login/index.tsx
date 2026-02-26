@@ -21,13 +21,13 @@ export default function Login() {
 
       // 验证 token 获取权限
       const verifyResponse = await userApi.verifyAccessToken();
-      const { scopes } = verifyResponse.data;
+      const { scope } = verifyResponse.data;
 
       // 获取用户信息
       const userResponse = await userApi.getMe();
 
       // 登录成功
-      login(userResponse.data, scopes);
+      login(userResponse.data, scope);
       message.success('登录成功');
       navigate('/profile');
     } catch (error: any) {

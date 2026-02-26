@@ -34,7 +34,7 @@ async def middleware(request: Request, call_next: Callable) -> Response:
     error = None
     try:
         context.status_ctx.set("start")  # 设置 status 到 ContextVar
-        logger.info("Request incoming")
+        logger.debug("Request incoming")
         context.status_ctx.set("processing")  # 设置 status 到 ContextVar
         response = await call_next(request)  # 执行请求
     except Exception as e:
@@ -48,7 +48,8 @@ async def middleware(request: Request, call_next: Callable) -> Response:
             context.status_ctx.set("fail")  # 设置 status 到 ContextVar
         else:
             context.status_ctx.set("finish")  # 设置 status 到 ContextVar
-            logger.info("Request completed")
+
+            logger.debug("Request completed")
 
     # 添加请求ID和追踪ID到响应头
     response.headers["X-Request-ID"] = request_id

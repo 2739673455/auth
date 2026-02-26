@@ -39,12 +39,9 @@ export interface UpdatePasswordRequest {
 
 export interface AccessTokenPayload {
   sub: number;
-  name: string;
-  scopes: string[];
   exp: number;
-  iat: number;
   jti: string;
-  type: string;
+  scope: string[];
 }
 
 // 管理员相关类型
@@ -71,7 +68,7 @@ export interface UserInfo {
   email: string;
   username: string;
   yn: number;
-  create_at: string;
+  create_at: string | null;
 }
 
 export interface UserListResponse {
@@ -88,7 +85,7 @@ export interface GroupInfo {
   id: number;
   name: string;
   yn: number;
-  create_at: string;
+  create_at: string | null;
 }
 
 export interface GroupDetailResponse extends GroupInfo {
@@ -101,7 +98,7 @@ export interface ScopeInfo {
   name: string;
   description: string | null;
   yn: number;
-  create_at: string;
+  create_at: string | null;
 }
 
 export interface ScopeDetailResponse extends ScopeInfo {

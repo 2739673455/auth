@@ -53,9 +53,9 @@ export default function ForgetPassword() {
 
       // 自动登录
       const verifyResponse = await userApi.verifyAccessToken();
-      const { scopes } = verifyResponse.data;
+      const { scope } = verifyResponse.data;
       const userResponse = await userApi.getMe();
-      login(userResponse.data, scopes);
+      login(userResponse.data, scope);
       
       navigate('/profile');
     } catch (error: any) {
