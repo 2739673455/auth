@@ -6,7 +6,9 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.repositories.relation
+from app.repositories import group as group_repo
 from app.schemas import admin as admin_schema
+from app.services import token as token_service
 from app.utils import db
 from app.utils.log import logger
 
@@ -22,6 +24,11 @@ async def api_add_user_group(
     """批量添加用户-组关联"""
     user_group_tuples = [(r.user_id, r.group_id) for r in body.relations]
     await app.repositories.relation.add_user_group(db_session, user_group_tuples)
+
+    # 更新涉及用户的令牌权限
+    user_ids = {r.user_id for r in body.relations}
+    await token_service.update_users_tokens(db_session, user_ids)
+
     logger.info(f"Admin batch added user-group relation {user_group_tuples}")
 
 
@@ -33,6 +40,11 @@ async def api_remove_user_group(
     """批量移除用户-组关联"""
     user_group_tuples = [(r.user_id, r.group_id) for r in body.relations]
     await app.repositories.relation.remove_user_group(db_session, user_group_tuples)
+
+    # 更新涉及用户的令牌权限
+    user_ids = {r.user_id for r in body.relations}
+    await token_service.update_users_tokens(db_session, user_ids)
+
     logger.info(f"Admin batch removed user-group relation {user_group_tuples}")
 
 
@@ -45,6 +57,16 @@ async def api_add_group_scope(
     """批量添加组-权限关联"""
     group_scope_tuples = [(r.group_id, r.scope_id) for r in body.relations]
     await app.repositories.relation.add_group_scope(db_session, group_scope_tuples)
+
+    # 获取涉及的组内用户并更新令牌权限
+    group_ids = {r.group_id for r in body.relations}
+    user_ids: set[int] = set()
+    for group_id in group_ids:
+        group = await group_repo.get_by_id_with_user(db_session, group_id)
+        if group and group.user:
+            user_ids.update(u.id for u in group.user)
+    await token_service.update_users_tokens(db_session, user_ids)
+
     logger.info(f"Admin batch added group-scope relation {group_scope_tuples}")
 
 
@@ -56,4 +78,14 @@ async def api_remove_group_scope(
     """批量移除组-权限关联"""
     group_scope_tuples = [(r.group_id, r.scope_id) for r in body.relations]
     await app.repositories.relation.remove_group_scope(db_session, group_scope_tuples)
+
+    # 获取涉及的组内用户并更新令牌权限
+    group_ids = {r.group_id for r in body.relations}
+    user_ids: set[int] = set()
+    for group_id in group_ids:
+        group = await group_repo.get_by_id_with_user(db_session, group_id)
+        if group and group.user:
+            user_ids.update(u.id for u in group.user)
+    await token_service.update_users_tokens(db_session, user_ids)
+
     logger.info(f"Admin batch removed group-scope relation {group_scope_tuples}")

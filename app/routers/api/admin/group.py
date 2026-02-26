@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.exceptions import group as group_error
 from app.repositories import group as group_repo
 from app.schemas import admin as admin_schema
+from app.services import token as token_service
 from app.utils import db
 from app.utils.log import logger
 
@@ -23,8 +24,10 @@ async def api_create_group(
     # 检查组名是否已存在
     if await group_repo.get_by_name(db_session, body.name):
         raise group_error.GroupNameExistsError  # 组名已存在
+
     # 创建组
     group = await group_repo.create(db_session, body.name)
+
     logger.info(f"Admin created group: {group.name}")
     return admin_schema.GroupInfo.from_group(group)
 
@@ -40,15 +43,31 @@ async def api_update_group(
     # 检查组是否存在
     if not group:
         raise group_error.GroupNotFoundError  # 组不存在
+
     # 检查组名是否已存在
     if (
         body.name
         and body.name != group.name
         and await group_repo.get_by_name(db_session, body.name)
     ):
-        raise group_error.GroupNameExistsError
+        raise group_error.GroupNameExistsError  # 组名已存在
+
+    # 保存原来的 yn 值
+    original_yn = group.yn
+
     # 更新组信息
     await group_repo.update(db_session, group, name=body.name, yn=body.yn)
+
+    # 如果禁用或启用组，更新所有涉及用户的访问令牌权限
+    if body.yn is not None and body.yn != original_yn:
+        # 重新获取组（带用户关联）
+        group_with_users = await group_repo.get_by_id_with_user(
+            db_session, body.group_id
+        )
+        if group_with_users and group_with_users.user:
+            user_ids = {u.id for u in group_with_users.user}
+            await token_service.update_users_tokens(db_session, user_ids)
+
     logger.info(f"Admin updated group: group_id={group.id}")
     return admin_schema.GroupInfo.from_group(group)
 
@@ -59,7 +78,21 @@ async def api_remove_group(
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
 ) -> None:
     """删除组"""
+    # 获取组（带用户关联）
+    group = await group_repo.get_by_id_with_user(db_session, body.group_id)
+    if not group:
+        raise group_error.GroupNotFoundError  # 组不存在
+
+    # 收集需要更新令牌的用户
+    user_ids = {u.id for u in group.user}
+
+    # 删除组
     await group_repo.remove(db_session, body.group_id)
+
+    # 更新所有涉及用户的访问令牌权限
+    await token_service.update_users_tokens(db_session, user_ids)
+
+    logger.info(f"Admin removed group: {group.name}")
 
 
 @router.get("/list_groups")
@@ -88,8 +121,12 @@ async def api_get_group(
     # 检查组是否存在
     if not group:
         raise group_error.GroupNotFoundError  # 组不存在
+
+    # 获取组的用户
     users = [admin_schema.UserInfo.from_user(u) for u in group.user]
+    # 获取组的权限
     scopes = [admin_schema.ScopeInfo.from_scope(s) for s in group.scope]
+
     return admin_schema.GroupDetailResponse(
         id=group.id,
         name=group.name,

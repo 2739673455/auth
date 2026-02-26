@@ -14,7 +14,12 @@ fake = Faker("zh_CN")
 
 def gen_test_user() -> dict:
     """生成测试用户数据"""
-    return {"username": fake.name(), "email": fake.email(), "password": fake.password()}
+    suffix = uuid.uuid4().hex[:8]
+    return {
+        "username": f"{fake.name()}_{suffix}",
+        "email": f"{fake.user_name()}_{suffix}@test.com",
+        "password": fake.password(),
+    }
 
 
 def gen_test_group() -> dict:

@@ -31,18 +31,13 @@ async def create_access_token(db_session: AsyncSession, user_id: int) -> str:
     }
     token = jwt.encode(payload, CFG.auth.secret_key, CFG.auth.algorithm)
 
-    # 查询用户权限
+    # 查询用户有效权限
     user = await user_repo.get_by_id_with_group_scope(db_session, user_id)
     if not user:
         raise user_error.UserNotFoundError  # 用户不存在
     scopes = []
-    seen_scope_ids = set()
     if user.group:
-        for g in user.group:
-            for s in g.scope:
-                if s.id not in seen_scope_ids:
-                    seen_scope_ids.add(s.id)
-                    scopes.append(s.name)
+        scopes = list({s.name for g in user.group if g.yn for s in g.scope if s.yn})
 
     # 存储访问令牌
     await token_repo.create(user_id, jti, expire_seconds, scopes)
@@ -70,6 +65,23 @@ async def authenticate_access_token(
     data = await token_repo.get(int(payload.sub), payload.jti)
     if data is None:
         raise auth_error.InvalidAccessTokenError  # 访问令牌不存在
+
     payload.scope = data["scope"]
 
     return payload
+
+
+async def update_users_tokens(db_session: AsyncSession, user_ids: set[int]) -> None:
+    """刷新用户的令牌权限
+
+    重新计算用户的有效权限并更新其所有令牌。
+
+    Args:
+        db_session: 数据库会话
+        user_ids: 需要刷新令牌的用户 ID 集合
+    """
+    for user_id in user_ids:
+        user = await user_repo.get_by_id_with_group_scope(db_session, user_id)
+        if user and user.group:
+            scopes = list({s.name for g in user.group if g.yn for s in g.scope if s.yn})
+            await token_repo.update_all(user_id, scopes)

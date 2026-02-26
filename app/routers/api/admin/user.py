@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import user as user_error
+from app.repositories import token as token_repo
 from app.repositories import user as user_repo
 from app.schemas import admin as admin_schema
 from app.schemas.admin import _format_datetime
@@ -24,8 +25,10 @@ async def api_create_user(
     # 检查邮箱是否已经注册
     if await user_repo.get_by_email(db_session, body.email):
         raise user_error.EmailAlreadyExistsError  # 邮箱已注册
+
     # 创建用户
     user = await user_repo.create(db_session, body.email, body.username, body.password)
+
     logger.info(f"Admin created user: {user.email}")
     return admin_schema.UserInfo.from_user(user)
 
@@ -34,13 +37,14 @@ async def api_create_user(
 async def api_update_user(
     body: admin_schema.UpdateUserRequest,
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
-) -> None:
+) -> admin_schema.UserInfo:
     """更新用户信息"""
     # 获取用户信息
     user = await user_repo.get_by_id(db_session, body.user_id)
     # 检查用户是否存在
     if not user:
         raise user_error.UserNotFoundError  # 用户不存在
+
     # 检查邮箱是否已经注册
     if (
         body.email
@@ -48,6 +52,7 @@ async def api_update_user(
         and await user_repo.get_by_email(db_session, body.email)
     ):
         raise user_error.EmailAlreadyExistsError  # 邮箱已注册
+
     # 更新用户信息
     await user_repo.update(
         db_session,
@@ -57,7 +62,13 @@ async def api_update_user(
         password=body.password,
         yn=body.yn,
     )
+
+    # 如果禁用用户，撤销用户所有访问令牌
+    if body.yn == 0:
+        await token_repo.revoke_all(user.id)
+
     logger.info(f"Admin updated user: user_id={user.id}")
+    return admin_schema.UserInfo.from_user(user)
 
 
 @router.post("/remove_user")
@@ -66,7 +77,19 @@ async def api_remove_user(
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
 ) -> None:
     """删除用户"""
+    # 获取用户信息
+    user = await user_repo.get_by_id(db_session, body.user_id)
+    # 检查用户是否存在
+    if not user:
+        raise user_error.UserNotFoundError  # 用户不存在
+
+    # 删除用户
     await user_repo.remove(db_session, body.user_id)
+
+    # 撤销用户所有访问令牌
+    await token_repo.revoke_all(user.id)
+
+    logger.info(f"Admin removed user: {user.name}-{user.email}")
 
 
 @router.get("/list_users")
@@ -94,6 +117,7 @@ async def api_get_user(
     # 检查用户是否存在
     if not user:
         raise user_error.UserNotFoundError  # 用户不存在
+
     # 获取用户的组
     groups = [admin_schema.GroupInfo.from_group(g) for g in user.group]
     # 获取用户的权限
@@ -104,6 +128,7 @@ async def api_get_user(
             if s.id not in seen_scope_ids:
                 seen_scope_ids.add(s.id)
                 scopes.append(admin_schema.ScopeInfo.from_scope(s))
+
     return admin_schema.UserDetailResponse(
         id=user.id,
         email=user.email,
