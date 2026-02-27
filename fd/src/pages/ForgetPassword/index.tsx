@@ -205,10 +205,10 @@ export default function ForgetPassword() {
 										id="email"
 										type="email"
 										placeholder="请输入邮箱"
-										className={`pl-10 bg-[#f0ece6] shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl ${
+										className={`pl-10 bg-[#f0ece6] shadow-[0_1px_3px_rgba(0,0,0,0.1)] rounded-xl ${
 											emailError
 												? "border-red-400 focus-visible:ring-red-400"
-												: "border-stone-300/60"
+												: "border-transparent"
 										}`}
 										value={formData.email}
 										onChange={handleEmailChange}
@@ -230,10 +230,10 @@ export default function ForgetPassword() {
 										<Input
 											id="code"
 											placeholder="请输入验证码"
-											className={`pl-10 bg-[#f0ece6] shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl ${
+											className={`pl-10 bg-[#f0ece6] shadow-[0_1px_3px_rgba(0,0,0,0.1)] rounded-xl ${
 												codeError
 													? "border-red-400 focus-visible:ring-red-400"
-													: "border-stone-300/60"
+													: "border-transparent"
 											}`}
 											value={formData.code}
 											onChange={handleCodeChange}
@@ -272,10 +272,10 @@ export default function ForgetPassword() {
 										id="password"
 										type="password"
 										placeholder="请输入新密码"
-										className={`pl-10 bg-[#f0ece6] shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl ${
+										className={`pl-10 bg-[#f0ece6] shadow-[0_1px_3px_rgba(0,0,0,0.1)] rounded-xl ${
 											passwordError
 												? "border-red-400 focus-visible:ring-red-400"
-												: "border-stone-300/60"
+												: "border-transparent"
 										}`}
 										value={formData.password}
 										onChange={handlePasswordChange}
@@ -299,10 +299,10 @@ export default function ForgetPassword() {
 										id="confirmPassword"
 										type="password"
 										placeholder="请确认新密码"
-										className={`pl-10 bg-[#f0ece6] shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl ${
+										className={`pl-10 bg-[#f0ece6] shadow-[0_1px_3px_rgba(0,0,0,0.1)] rounded-xl ${
 											confirmPasswordError
 												? "border-red-400 focus-visible:ring-red-400"
-												: "border-stone-300/60"
+												: "border-transparent"
 										}`}
 										value={confirmPassword}
 										onChange={handleConfirmPasswordChange}

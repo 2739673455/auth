@@ -95,10 +95,10 @@ export default function Login() {
 										id="email"
 										type="email"
 										placeholder="请输入邮箱"
-										className={`pl-10 bg-[#f0ece6] shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl ${
+										className={`pl-10 bg-[#f0ece6] shadow-[0_1px_3px_rgba(0,0,0,0.1)] rounded-xl ${
 											emailError
 												? "border-red-400 focus-visible:ring-red-400"
-												: "border-stone-300/60"
+												: "border-transparent"
 										}`}
 										value={formData.email}
 										onChange={handleEmailChange}
@@ -120,10 +120,10 @@ export default function Login() {
 										id="password"
 										type="password"
 										placeholder="请输入密码"
-										className={`pl-10 bg-[#f0ece6] shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl ${
+										className={`pl-10 bg-[#f0ece6] shadow-[0_1px_3px_rgba(0,0,0,0.1)] rounded-xl ${
 											passwordError
 												? "border-red-400 focus-visible:ring-red-400"
-												: "border-stone-300/60"
+												: "border-transparent"
 										}`}
 										value={formData.password}
 										onChange={handlePasswordChange}

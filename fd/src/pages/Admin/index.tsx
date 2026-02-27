@@ -1,363 +1,1498 @@
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { ArrowLeft, Edit, Plus, Search, Shield, Trash2, User, Users, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
-import { adminGroupApi, adminScopeApi, adminUserApi } from '../../api/admin';
-import { useAuthStore } from '../../stores/authStore';
+	AlertCircle,
+	ArrowDownAz,
+	ArrowUpAz,
+	ArrowUpDown,
+	Check,
+	Edit,
+	Loader2,
+	LogOut,
+	Plus,
+	Shield,
+	Trash2,
+	User,
+	Users,
+	X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch as SwitchUI } from "@/components/ui/switch";
+import { handleApiError } from "@/lib/error";
+import {
+	validateEmailWithError,
+	validatePasswordWithError,
+	validateUsernameWithError,
+} from "@/lib/validation";
+import {
+	adminGroupApi,
+	adminRelationApi,
+	adminScopeApi,
+	adminUserApi,
+} from "../../api/admin";
+import { useAuthStore } from "../../stores/authStore";
+import type {
+	CreateGroupRequest,
+	CreateScopeRequest,
+	CreateUserRequest,
+	GroupDetailResponse,
+	GroupInfo,
+	ScopeDetailResponse,
+	ScopeInfo,
+	UpdateGroupRequest,
+	UpdateScopeRequest,
+	UpdateUserRequest,
+	UserDetailResponse,
+	UserInfo,
+} from "../../types";
 
-interface UserInfo {
-  id: number;
-  username: string;
-  email: string;
-  yn: number;
-}
-interface GroupInfo {
-  id: number;
-  name: string;
-  yn: number;
-}
-interface ScopeInfo {
-  id: number;
-  name: string;
-  yn: number;
+type SortField = "id" | "username" | "email" | "name";
+type SortOrder = "asc" | "desc";
+
+interface SortState {
+	field: SortField;
+	order: SortOrder;
 }
 
 interface FilterState {
-  userId: number | null;
-  groupId: number | null;
-  scopeId: number | null;
+	userId: number | null;
+	groupId: number | null;
+	scopeId: number | null;
 }
 
 export default function AdminPanel() {
-  const navigate = useNavigate();
-  const { logout } = useAuthStore();
+	const navigate = useNavigate();
+	const { logout, hasScope } = useAuthStore();
 
-  const [users, setUsers] = useState<UserInfo[]>([]);
-  const [groups, setGroups] = useState<GroupInfo[]>([]);
-  const [scopes, setScopes] = useState<ScopeInfo[]>([]);
-  const [filter, setFilter] = useState<FilterState>({ userId: null, groupId: null, scopeId: null });
+	// 数据
+	const [users, setUsers] = useState<UserInfo[]>([]);
+	const [groups, setGroups] = useState<GroupInfo[]>([]);
+	const [scopes, setScopes] = useState<ScopeInfo[]>([]);
+	const [userDetail, setUserDetail] = useState<UserDetailResponse | null>(null);
+	const [groupDetail, setGroupDetail] = useState<GroupDetailResponse | null>(
+		null,
+	);
+	const [scopeDetail, setScopeDetail] = useState<ScopeDetailResponse | null>(
+		null,
+	);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [usersRes, groupsRes, scopesRes] = await Promise.all([
-        adminUserApi.listUsers({}),
-        adminGroupApi.listGroups({}),
-        adminScopeApi.listScopes({}),
-      ]);
-      setUsers(usersRes.data.items);
-      setGroups(groupsRes.data.items);
-      setScopes(scopesRes.data.items);
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        await logout();
-        navigate('/login');
-      } else {
-        toast.error('获取数据失败');
-      }
-    }
-  }, [logout, navigate]);
+	// 加载状态
+	const [loading, setLoading] = useState(true);
+	const [detailLoading, setDetailLoading] = useState(false);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+	// 排序状态
+	const [userSort, setUserSort] = useState<SortState>({
+		field: "id",
+		order: "asc",
+	});
+	const [groupSort, setGroupSort] = useState<SortState>({
+		field: "id",
+		order: "asc",
+	});
+	const [scopeSort, setScopeSort] = useState<SortState>({
+		field: "id",
+		order: "asc",
+	});
 
-  const handleDeleteUser = async (id: number) => {
-    if (!confirm('确定删除该用户？')) return;
-    try {
-      await adminUserApi.removeUser({ user_id: id });
-      toast.success('删除成功');
-      fetchData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || '删除失败');
-    }
-  };
+	// 筛选状态
+	const [filter, setFilter] = useState<FilterState>({
+		userId: null,
+		groupId: null,
+		scopeId: null,
+	});
 
-  const handleDeleteGroup = async (id: number) => {
-    if (!confirm('确定删除该组？')) return;
-    try {
-      await adminGroupApi.removeGroup({ group_id: id });
-      toast.success('删除成功');
-      fetchData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || '删除失败');
-    }
-  };
+	// 弹窗状态
+	const [createUserOpen, setCreateUserOpen] = useState(false);
+	const [editUserOpen, setEditUserOpen] = useState(false);
+	const [createGroupOpen, setCreateGroupOpen] = useState(false);
+	const [editGroupOpen, setEditGroupOpen] = useState(false);
+	const [createScopeOpen, setCreateScopeOpen] = useState(false);
+	const [editScopeOpen, setEditScopeOpen] = useState(false);
 
-  const handleDeleteScope = async (id: number) => {
-    if (!confirm('确定删除该权限？')) return;
-    try {
-      await adminScopeApi.removeScope({ scope_id: id });
-      toast.success('删除成功');
-      fetchData();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || '删除失败');
-    }
-  };
+	// 表单状态 - 创建用户
+	const [newUserEmail, setNewUserEmail] = useState("");
+	const [newUserUsername, setNewUserUsername] = useState("");
+	const [newUserPassword, setNewUserPassword] = useState("");
+	const [createUserLoading, setCreateUserLoading] = useState(false);
 
-  return (
-    <div className="min-h-screen bg-muted/30">
-      <header className="h-14 bg-background border-b flex items-center px-6">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/profile')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          返回
-        </Button>
-        <h1 className="ml-4 text-lg font-semibold">管理面板</h1>
-      </header>
+	// 表单状态 - 编辑用户
+	const [editUserId, setEditUserId] = useState<number | null>(null);
+	const [editUserUsernameVal, setEditUserUsernameVal] = useState("");
+	const [editUserEmailVal, setEditUserEmailVal] = useState("");
+	const [editUserPasswordVal, setEditUserPasswordVal] = useState("");
+	const [editUserYn, setEditUserYn] = useState(1);
+	const [editUserLoading, setEditUserLoading] = useState(false);
+	const [editUserGroups, setEditUserGroups] = useState<number[]>([]);
 
-      <main className="p-6 grid grid-cols-3 gap-6">
-        {/* Users */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              用户
-              {filter.userId && <Badge variant="secondary">筛选中</Badge>}
-            </CardTitle>
-            <Button size="sm" onClick={() => toast.info('新建用户功能待实现')}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2 mb-4">
-              <Input placeholder="搜索用户" />
-              <Button variant="outline" size="icon">
-                <Search className="h-4 w-4" />
-              </Button>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>用户名</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow
-                    key={user.id}
-                    className={
-                      filter.userId === user.id ? 'bg-blue-50' : user.yn === 0 ? 'opacity-50' : ''
-                    }
-                    onClick={() =>
-                      setFilter((f) => ({ ...f, userId: f.userId === user.id ? null : user.id }))
-                    }
-                  >
-                    <TableCell>{user.id}</TableCell>
-                    <TableCell>{user.username}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toast.info('编辑功能待实现');
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteUser(user.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+	// 表单状态 - 创建组
+	const [newGroupName, setNewGroupName] = useState("");
+	const [createGroupLoading, setCreateGroupLoading] = useState(false);
 
-        {/* Groups */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />组
-              {filter.groupId && <Badge variant="secondary">筛选中</Badge>}
-            </CardTitle>
-            <Button size="sm" onClick={() => toast.info('新建组功能待实现')}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2 mb-4">
-              <Input placeholder="搜索组" />
-              <Button variant="outline" size="icon">
-                <Search className="h-4 w-4" />
-              </Button>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>名称</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {groups.map((group) => (
-                  <TableRow
-                    key={group.id}
-                    className={
-                      filter.groupId === group.id
-                        ? 'bg-blue-50'
-                        : group.yn === 0
-                          ? 'opacity-50'
-                          : ''
-                    }
-                    onClick={() =>
-                      setFilter((f) => ({
-                        ...f,
-                        groupId: f.groupId === group.id ? null : group.id,
-                      }))
-                    }
-                  >
-                    <TableCell>{group.id}</TableCell>
-                    <TableCell>{group.name}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toast.info('编辑功能待实现');
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteGroup(group.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+	// 表单状态 - 编辑组
+	const [editGroupId, setEditGroupId] = useState<number | null>(null);
+	const [editGroupNameVal, setEditGroupNameVal] = useState("");
+	const [editGroupYn, setEditGroupYn] = useState(1);
+	const [editGroupLoading, setEditGroupLoading] = useState(false);
+	const [editGroupUsers, setEditGroupUsers] = useState<number[]>([]);
+	const [editGroupScopes, setEditGroupScopes] = useState<number[]>([]);
 
-        {/* Scopes */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              权限
-              {filter.scopeId && <Badge variant="secondary">筛选中</Badge>}
-            </CardTitle>
-            <Button size="sm" onClick={() => toast.info('新建权限功能待实现')}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2 mb-4">
-              <Input placeholder="搜索权限" />
-              <Button variant="outline" size="icon">
-                <Search className="h-4 w-4" />
-              </Button>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>名称</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {scopes.map((scope) => (
-                  <TableRow
-                    key={scope.id}
-                    className={
-                      filter.scopeId === scope.id
-                        ? 'bg-blue-50'
-                        : scope.yn === 0
-                          ? 'opacity-50'
-                          : ''
-                    }
-                    onClick={() =>
-                      setFilter((f) => ({
-                        ...f,
-                        scopeId: f.scopeId === scope.id ? null : scope.id,
-                      }))
-                    }
-                  >
-                    <TableCell>{scope.id}</TableCell>
-                    <TableCell>{scope.name}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toast.info('编辑功能待实现');
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteScope(scope.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </main>
+	// 表单状态 - 创建权限
+	const [newScopeName, setNewScopeName] = useState("");
+	const [newScopeDesc, setNewScopeDesc] = useState("");
+	const [createScopeLoading, setCreateScopeLoading] = useState(false);
 
-      {/* Filter Bar */}
-      {(filter.userId || filter.groupId || filter.scopeId) && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-background border rounded-full px-4 py-2 shadow-lg flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">当前筛选:</span>
-          {filter.userId && (
-            <Badge>用户: {users.find((u) => u.id === filter.userId)?.username}</Badge>
-          )}
-          {filter.groupId && <Badge>组: {groups.find((g) => g.id === filter.groupId)?.name}</Badge>}
-          {filter.scopeId && (
-            <Badge>权限: {scopes.find((s) => s.id === filter.scopeId)?.name}</Badge>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setFilter({ userId: null, groupId: null, scopeId: null })}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
-    </div>
-  );
+	// 表单状态 - 编辑权限
+	const [editScopeId, setEditScopeId] = useState<number | null>(null);
+	const [editScopeNameVal, setEditScopeNameVal] = useState("");
+	const [editScopeDescVal, setEditScopeDescVal] = useState("");
+	const [editScopeYn, setEditScopeYn] = useState(1);
+	const [editScopeLoading, setEditScopeLoading] = useState(false);
+	const [editScopeGroups, setEditScopeGroups] = useState<number[]>([]);
+
+	// 获取基础数据
+	const fetchBaseData = useCallback(async () => {
+		setLoading(true);
+		try {
+			const [usersRes, groupsRes, scopesRes] = await Promise.all([
+				adminUserApi.listUsers({}),
+				adminGroupApi.listGroups({}),
+				adminScopeApi.listScopes({}),
+			]);
+			setUsers(usersRes.data.items);
+			setGroups(groupsRes.data.items);
+			setScopes(scopesRes.data.items);
+		} catch (error: any) {
+			if (error.response?.status === 401) {
+				await logout();
+				navigate("/login");
+			} else {
+				handleApiError(error, "获取数据失败");
+			}
+		} finally {
+			setLoading(false);
+		}
+	}, [logout, navigate]);
+
+	// 获取详情数据
+	const fetchDetail = useCallback(async () => {
+		setDetailLoading(true);
+		try {
+			const promises: Promise<void>[] = [];
+			if (filter.userId) {
+				promises.push(
+					adminUserApi
+						.getUser(filter.userId)
+						.then((res) => setUserDetail(res.data)),
+				);
+			} else {
+				setUserDetail(null);
+			}
+			if (filter.groupId) {
+				promises.push(
+					adminGroupApi
+						.getGroup(filter.groupId)
+						.then((res) => setGroupDetail(res.data)),
+				);
+			} else {
+				setGroupDetail(null);
+			}
+			if (filter.scopeId) {
+				promises.push(
+					adminScopeApi
+						.getScope(filter.scopeId)
+						.then((res) => setScopeDetail(res.data)),
+				);
+			} else {
+				setScopeDetail(null);
+			}
+			await Promise.all(promises);
+		} catch (error: any) {
+			handleApiError(error, "获取详情失败");
+		} finally {
+			setDetailLoading(false);
+		}
+	}, [filter]);
+
+	useEffect(() => {
+		fetchBaseData();
+	}, [fetchBaseData]);
+
+	useEffect(() => {
+		if (filter.userId || filter.groupId || filter.scopeId) {
+			fetchDetail();
+		}
+	}, [filter, fetchDetail]);
+
+	// 筛选后的数据
+	const filteredUsers = useMemo(() => {
+		let result = users;
+		if (filter.groupId && groupDetail) {
+			result = result.filter((u) =>
+				groupDetail.users.some((gu) => gu.id === u.id),
+			);
+		}
+		if (filter.scopeId && scopeDetail) {
+			result = result.filter((u) =>
+				scopeDetail.users.some((su) => su.id === u.id),
+			);
+		}
+		return result;
+	}, [users, filter.groupId, filter.scopeId, groupDetail, scopeDetail]);
+
+	const filteredGroups = useMemo(() => {
+		let result = groups;
+		if (filter.userId && userDetail) {
+			result = result.filter((g) =>
+				userDetail.groups.some((ug) => ug.id === g.id),
+			);
+		}
+		if (filter.scopeId && scopeDetail) {
+			result = result.filter((g) =>
+				scopeDetail.groups.some((sg) => sg.id === g.id),
+			);
+		}
+		return result;
+	}, [groups, filter.userId, filter.scopeId, userDetail, scopeDetail]);
+
+	const filteredScopes = useMemo(() => {
+		let result = scopes;
+		if (filter.userId && userDetail) {
+			result = result.filter((s) =>
+				userDetail.scopes.some((us) => us.id === s.id),
+			);
+		}
+		if (filter.groupId && groupDetail) {
+			result = result.filter((s) =>
+				groupDetail.scopes.some((gs) => gs.id === s.id),
+			);
+		}
+		return result;
+	}, [scopes, filter.userId, filter.groupId, userDetail, groupDetail]);
+
+	// 排序后的数据
+	const sortedUsers = useMemo(() => {
+		const sorted = [...filteredUsers];
+		sorted.sort((a, b) => {
+			let cmp = 0;
+			if (userSort.field === "id") {
+				cmp = a.id - b.id;
+			} else if (userSort.field === "username") {
+				cmp = a.username.localeCompare(b.username);
+			} else if (userSort.field === "email") {
+				cmp = a.email.localeCompare(b.email);
+			}
+			return userSort.order === "asc" ? cmp : -cmp;
+		});
+		return sorted;
+	}, [filteredUsers, userSort]);
+
+	const sortedGroups = useMemo(() => {
+		const sorted = [...filteredGroups];
+		sorted.sort((a, b) => {
+			let cmp = 0;
+			if (groupSort.field === "id") {
+				cmp = a.id - b.id;
+			} else if (groupSort.field === "name") {
+				cmp = a.name.localeCompare(b.name);
+			}
+			return groupSort.order === "asc" ? cmp : -cmp;
+		});
+		return sorted;
+	}, [filteredGroups, groupSort]);
+
+	const sortedScopes = useMemo(() => {
+		const sorted = [...filteredScopes];
+		sorted.sort((a, b) => {
+			let cmp = 0;
+			if (scopeSort.field === "id") {
+				cmp = a.id - b.id;
+			} else if (scopeSort.field === "name") {
+				cmp = a.name.localeCompare(b.name);
+			}
+			return scopeSort.order === "asc" ? cmp : -cmp;
+		});
+		return sorted;
+	}, [filteredScopes, scopeSort]);
+
+	// 点击筛选逻辑
+	const handleUserClick = (user: UserInfo) => {
+		if (filter.userId === user.id) {
+			setFilter((f) => ({ ...f, userId: null }));
+		} else {
+			setFilter((f) => ({ ...f, userId: user.id }));
+		}
+	};
+
+	const handleGroupClick = (group: GroupInfo) => {
+		if (filter.groupId === group.id) {
+			setFilter((f) => ({ ...f, groupId: null }));
+		} else {
+			setFilter((f) => ({ ...f, groupId: group.id }));
+		}
+	};
+
+	const handleScopeClick = (scope: ScopeInfo) => {
+		if (filter.scopeId === scope.id) {
+			setFilter((f) => ({ ...f, scopeId: null }));
+		} else {
+			setFilter((f) => ({ ...f, scopeId: scope.id }));
+		}
+	};
+
+	// 清除筛选
+	const clearFilter = () => {
+		setFilter({ userId: null, groupId: null, scopeId: null });
+	};
+
+	// 切换排序
+	const toggleUserSort = (field: SortField) => {
+		if (userSort.field === field) {
+			setUserSort((s) => ({ ...s, order: s.order === "asc" ? "desc" : "asc" }));
+		} else {
+			setUserSort({ field, order: "asc" });
+		}
+	};
+
+	const toggleGroupSort = (field: SortField) => {
+		if (groupSort.field === field) {
+			setGroupSort((s) => ({
+				...s,
+				order: s.order === "asc" ? "desc" : "asc",
+			}));
+		} else {
+			setGroupSort({ field, order: "asc" });
+		}
+	};
+
+	const toggleScopeSort = (field: SortField) => {
+		if (scopeSort.field === field) {
+			setScopeSort((s) => ({
+				...s,
+				order: s.order === "asc" ? "desc" : "asc",
+			}));
+		} else {
+			setScopeSort({ field, order: "asc" });
+		}
+	};
+
+	// 创建用户
+	const handleCreateUser = async (e: React.FormEvent) => {
+		e.preventDefault();
+		const emailResult = validateEmailWithError(newUserEmail);
+		if (!emailResult.valid) {
+			toast.error(emailResult.error);
+			return;
+		}
+		const usernameResult = validateUsernameWithError(newUserUsername);
+		if (!usernameResult.valid) {
+			toast.error(usernameResult.error);
+			return;
+		}
+		const passwordResult = validatePasswordWithError(newUserPassword);
+		if (!passwordResult.valid) {
+			toast.error(passwordResult.error);
+			return;
+		}
+		setCreateUserLoading(true);
+		try {
+			const data: CreateUserRequest = {
+				email: newUserEmail,
+				username: newUserUsername,
+				password: newUserPassword,
+			};
+			await adminUserApi.createUser(data);
+			toast.success("用户创建成功");
+			setCreateUserOpen(false);
+			setNewUserEmail("");
+			setNewUserUsername("");
+			setNewUserPassword("");
+			fetchBaseData();
+		} catch (error: any) {
+			handleApiError(error, "创建失败");
+		} finally {
+			setCreateUserLoading(false);
+		}
+	};
+
+	// 打开编辑用户弹窗
+	const openEditUser = async (user: UserInfo) => {
+		setEditUserId(user.id);
+		setEditUserUsernameVal(user.username);
+		setEditUserEmailVal(user.email);
+		setEditUserPasswordVal("");
+		setEditUserYn(user.yn);
+		try {
+			const res = await adminUserApi.getUser(user.id);
+			setEditUserGroups(res.data.groups.map((g) => g.id));
+		} catch {
+			setEditUserGroups([]);
+		}
+		setEditUserOpen(true);
+	};
+
+	// 编辑用户
+	const handleEditUser = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editUserId) return;
+		setEditUserLoading(true);
+		try {
+			const data: UpdateUserRequest = {
+				user_id: editUserId,
+				username: editUserUsernameVal || undefined,
+				email: editUserEmailVal || undefined,
+				password: editUserPasswordVal || undefined,
+				yn: editUserYn,
+			};
+			await adminUserApi.updateUser(data);
+			// 更新关联
+			const currentGroups = editUserGroups;
+			const originalGroups = userDetail?.groups.map((g) => g.id) || [];
+			const toAdd = currentGroups.filter((id) => !originalGroups.includes(id));
+			const toRemove = originalGroups.filter(
+				(id) => !currentGroups.includes(id),
+			);
+			if (toAdd.length > 0) {
+				await adminRelationApi.addUserGroup({
+					relations: toAdd.map((groupId) => ({
+						user_id: editUserId,
+						group_id: groupId,
+					})),
+				});
+			}
+			if (toRemove.length > 0) {
+				await adminRelationApi.removeUserGroup({
+					relations: toRemove.map((groupId) => ({
+						user_id: editUserId,
+						group_id: groupId,
+					})),
+				});
+			}
+			toast.success("用户更新成功");
+			setEditUserOpen(false);
+			fetchBaseData();
+			if (filter.userId === editUserId) {
+				fetchDetail();
+			}
+		} catch (error: any) {
+			handleApiError(error, "更新失败");
+		} finally {
+			setEditUserLoading(false);
+		}
+	};
+
+	// 删除用户
+	const handleDeleteUser = async (id: number) => {
+		if (!confirm("确定删除该用户？")) return;
+		try {
+			await adminUserApi.removeUser({ user_id: id });
+			toast.success("删除成功");
+			if (filter.userId === id) {
+				setFilter((f) => ({ ...f, userId: null }));
+			}
+			fetchBaseData();
+		} catch (error: any) {
+			handleApiError(error, "删除失败");
+		}
+	};
+
+	// 创建组
+	const handleCreateGroup = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!newGroupName.trim()) {
+			toast.error("组名不能为空");
+			return;
+		}
+		setCreateGroupLoading(true);
+		try {
+			const data: CreateGroupRequest = { name: newGroupName };
+			await adminGroupApi.createGroup(data);
+			toast.success("组创建成功");
+			setCreateGroupOpen(false);
+			setNewGroupName("");
+			fetchBaseData();
+		} catch (error: any) {
+			handleApiError(error, "创建失败");
+		} finally {
+			setCreateGroupLoading(false);
+		}
+	};
+
+	// 打开编辑组弹窗
+	const openEditGroup = async (group: GroupInfo) => {
+		setEditGroupId(group.id);
+		setEditGroupNameVal(group.name);
+		setEditGroupYn(group.yn);
+		try {
+			const res = await adminGroupApi.getGroup(group.id);
+			setEditGroupUsers(res.data.users.map((u) => u.id));
+			setEditGroupScopes(res.data.scopes.map((s) => s.id));
+		} catch {
+			setEditGroupUsers([]);
+			setEditGroupScopes([]);
+		}
+		setEditGroupOpen(true);
+	};
+
+	// 编辑组
+	const handleEditGroup = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editGroupId) return;
+		setEditGroupLoading(true);
+		try {
+			const data: UpdateGroupRequest = {
+				group_id: editGroupId,
+				name: editGroupNameVal || undefined,
+				yn: editGroupYn,
+			};
+			await adminGroupApi.updateGroup(data);
+			// 更新用户关联
+			const currentUsers = editGroupUsers;
+			const originalUsers = groupDetail?.users.map((u) => u.id) || [];
+			const toAddUsers = currentUsers.filter(
+				(id) => !originalUsers.includes(id),
+			);
+			const toRemoveUsers = originalUsers.filter(
+				(id) => !currentUsers.includes(id),
+			);
+			if (toAddUsers.length > 0) {
+				await adminRelationApi.addUserGroup({
+					relations: toAddUsers.map((userId) => ({
+						user_id: userId,
+						group_id: editGroupId,
+					})),
+				});
+			}
+			if (toRemoveUsers.length > 0) {
+				await adminRelationApi.removeUserGroup({
+					relations: toRemoveUsers.map((userId) => ({
+						user_id: userId,
+						group_id: editGroupId,
+					})),
+				});
+			}
+			// 更新权限关联
+			const currentScopes = editGroupScopes;
+			const originalScopes = groupDetail?.scopes.map((s) => s.id) || [];
+			const toAddScopes = currentScopes.filter(
+				(id) => !originalScopes.includes(id),
+			);
+			const toRemoveScopes = originalScopes.filter(
+				(id) => !currentScopes.includes(id),
+			);
+			if (toAddScopes.length > 0) {
+				await adminRelationApi.addGroupScope({
+					relations: toAddScopes.map((scopeId) => ({
+						group_id: editGroupId,
+						scope_id: scopeId,
+					})),
+				});
+			}
+			if (toRemoveScopes.length > 0) {
+				await adminRelationApi.removeGroupScope({
+					relations: toRemoveScopes.map((scopeId) => ({
+						group_id: editGroupId,
+						scope_id: scopeId,
+					})),
+				});
+			}
+			toast.success("组更新成功");
+			setEditGroupOpen(false);
+			fetchBaseData();
+			if (filter.groupId === editGroupId) {
+				fetchDetail();
+			}
+		} catch (error: any) {
+			handleApiError(error, "更新失败");
+		} finally {
+			setEditGroupLoading(false);
+		}
+	};
+
+	// 删除组
+	const handleDeleteGroup = async (id: number) => {
+		if (!confirm("确定删除该组？")) return;
+		try {
+			await adminGroupApi.removeGroup({ group_id: id });
+			toast.success("删除成功");
+			if (filter.groupId === id) {
+				setFilter((f) => ({ ...f, groupId: null }));
+			}
+			fetchBaseData();
+		} catch (error: any) {
+			handleApiError(error, "删除失败");
+		}
+	};
+
+	// 创建权限
+	const handleCreateScope = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!newScopeName.trim()) {
+			toast.error("权限名不能为空");
+			return;
+		}
+		setCreateScopeLoading(true);
+		try {
+			const data: CreateScopeRequest = {
+				name: newScopeName,
+				description: newScopeDesc || undefined,
+			};
+			await adminScopeApi.createScope(data);
+			toast.success("权限创建成功");
+			setCreateScopeOpen(false);
+			setNewScopeName("");
+			setNewScopeDesc("");
+			fetchBaseData();
+		} catch (error: any) {
+			handleApiError(error, "创建失败");
+		} finally {
+			setCreateScopeLoading(false);
+		}
+	};
+
+	// 打开编辑权限弹窗
+	const openEditScope = async (scope: ScopeInfo) => {
+		setEditScopeId(scope.id);
+		setEditScopeNameVal(scope.name);
+		setEditScopeDescVal(scope.description || "");
+		setEditScopeYn(scope.yn);
+		try {
+			const res = await adminScopeApi.getScope(scope.id);
+			setEditScopeGroups(res.data.groups.map((g) => g.id));
+		} catch {
+			setEditScopeGroups([]);
+		}
+		setEditScopeOpen(true);
+	};
+
+	// 编辑权限
+	const handleEditScope = async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!editScopeId) return;
+		setEditScopeLoading(true);
+		try {
+			const data: UpdateScopeRequest = {
+				scope_id: editScopeId,
+				name: editScopeNameVal || undefined,
+				description: editScopeDescVal || undefined,
+				yn: editScopeYn,
+			};
+			await adminScopeApi.updateScope(data);
+			// 更新组关联
+			const currentGroups = editScopeGroups;
+			const originalGroups = scopeDetail?.groups.map((g) => g.id) || [];
+			const toAdd = currentGroups.filter((id) => !originalGroups.includes(id));
+			const toRemove = originalGroups.filter(
+				(id) => !currentGroups.includes(id),
+			);
+			if (toAdd.length > 0) {
+				await adminRelationApi.addGroupScope({
+					relations: toAdd.map((groupId) => ({
+						group_id: groupId,
+						scope_id: editScopeId,
+					})),
+				});
+			}
+			if (toRemove.length > 0) {
+				await adminRelationApi.removeGroupScope({
+					relations: toRemove.map((groupId) => ({
+						group_id: groupId,
+						scope_id: editScopeId,
+					})),
+				});
+			}
+			toast.success("权限更新成功");
+			setEditScopeOpen(false);
+			fetchBaseData();
+			if (filter.scopeId === editScopeId) {
+				fetchDetail();
+			}
+		} catch (error: any) {
+			handleApiError(error, "更新失败");
+		} finally {
+			setEditScopeLoading(false);
+		}
+	};
+
+	// 删除权限
+	const handleDeleteScope = async (id: number) => {
+		if (!confirm("确定删除该权限？")) return;
+		try {
+			await adminScopeApi.removeScope({ scope_id: id });
+			toast.success("删除成功");
+			if (filter.scopeId === id) {
+				setFilter((f) => ({ ...f, scopeId: null }));
+			}
+			fetchBaseData();
+		} catch (error: any) {
+			handleApiError(error, "删除失败");
+		}
+	};
+
+	const handleLogout = async () => {
+		await logout();
+		toast.success("已登出");
+		navigate("/login");
+	};
+
+	// 渲染排序按钮
+	const renderSortButton = (
+		field: SortField,
+		currentSort: SortState,
+		onClick: () => void,
+		label: string,
+	) => (
+		<button
+			type="button"
+			onClick={onClick}
+			className={`flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors ${
+				currentSort.field === field
+					? "bg-stone-600 text-white"
+					: "text-stone-500 hover:bg-stone-200/50"
+			}`}
+		>
+			{label}
+			{currentSort.field === field ? (
+				currentSort.order === "asc" ? (
+					<ArrowUpAz className="h-3 w-3" />
+				) : (
+					<ArrowDownAz className="h-3 w-3" />
+				)
+			) : (
+				<ArrowUpDown className="h-3 w-3" />
+			)}
+		</button>
+	);
+
+	// 渲染列表项
+	const renderListItem = (
+		id: number,
+		displayContent: React.ReactNode,
+		isSelected: boolean,
+		isDisabled: boolean,
+		onEdit: () => void,
+		onDelete: () => void,
+		onClick: () => void,
+	) => (
+		<button
+			type="button"
+			onClick={onClick}
+			className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-colors w-full text-left ${
+				isSelected
+					? "bg-stone-600 text-white"
+					: isDisabled
+						? "opacity-50 hover:bg-stone-200/50"
+						: "hover:bg-stone-200/50"
+			}`}
+		>
+			{displayContent}
+			<div className="flex items-center gap-1">
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon"
+					className={`h-7 w-7 ${
+						isSelected
+							? "text-white hover:bg-white/20"
+							: "hover:bg-stone-300/50"
+					}`}
+					onClick={(e) => {
+						e.stopPropagation();
+						onEdit();
+					}}
+				>
+					<Edit className="h-4 w-4" />
+				</Button>
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon"
+					className={`h-7 w-7 ${
+						isSelected
+							? "text-white hover:bg-white/20"
+							: "hover:bg-stone-300/50 text-red-500"
+					}`}
+					onClick={(e) => {
+						e.stopPropagation();
+						onDelete();
+					}}
+				>
+					<Trash2 className="h-4 w-4" />
+				</Button>
+			</div>
+		</button>
+	);
+
+	// 渲染关联选择器
+	const renderRelationSelector = (
+		label: string,
+		items: { id: number; name: string }[],
+		selected: number[],
+		onChange: (selected: number[]) => void,
+	) => (
+		<div className="space-y-2">
+			<Label className="text-stone-600">{label}</Label>
+			<div className="max-h-32 overflow-y-auto space-y-1 rounded-xl bg-[#f0ece6] p-2">
+				{items.length === 0 ? (
+					<p className="text-sm text-stone-400 text-center py-2">暂无数据</p>
+				) : (
+					items.map((item) => (
+						<button
+							type="button"
+							key={item.id}
+							onClick={() => {
+								if (selected.includes(item.id)) {
+									onChange(selected.filter((id) => id !== item.id));
+								} else {
+									onChange([...selected, item.id]);
+								}
+							}}
+							className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors w-full text-left ${
+								selected.includes(item.id)
+									? "bg-stone-600 text-white"
+									: "hover:bg-stone-200/50"
+							}`}
+						>
+							<span className="text-sm">{item.name}</span>
+							{selected.includes(item.id) && <Check className="h-4 w-4" />}
+						</button>
+					))
+				)}
+			</div>
+		</div>
+	);
+
+	if (loading) {
+		return (
+			<div className="min-h-screen flex items-center justify-center bg-[#e8e4df]">
+				<Loader2 className="h-8 w-8 animate-spin text-stone-500" />
+			</div>
+		);
+	}
+
+	return (
+		<div className="min-h-screen flex bg-[#e8e4df]">
+			{/* 侧边栏 */}
+			<aside className="w-64 border-r border-stone-300/60 bg-[#f0ece6] flex flex-col">
+				<div className="p-4 text-center font-semibold text-lg text-stone-700">
+					管理面板
+				</div>
+				<nav className="flex-1 space-y-1 p-2">
+					<button
+						type="button"
+						onClick={() => navigate("/profile")}
+						className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-stone-600 hover:bg-stone-200/50"
+					>
+						<User className="h-4 w-4" />
+						个人信息
+					</button>
+					{hasScope("*") ? (
+						<button
+							type="button"
+							className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm bg-stone-600 text-white"
+						>
+							<Shield className="h-4 w-4" />
+							管理后台
+						</button>
+					) : null}
+				</nav>
+				<div className="p-2">
+					<Button
+						onClick={handleLogout}
+						className="w-full bg-red-500 text-white hover:bg-red-600 rounded-xl"
+					>
+						<LogOut className="mr-2 h-4 w-4" />
+						登出
+					</Button>
+				</div>
+			</aside>
+
+			{/* 主内容 */}
+			<main className="flex-1 p-6 overflow-hidden">
+				<div className="grid grid-cols-3 gap-6 h-full">
+					{/* 用户栏 */}
+					<div className="bg-[#f0ece6] rounded-2xl border border-stone-300/60 flex flex-col">
+						<div className="p-4 border-b border-stone-300/60">
+							<div className="flex items-center justify-between mb-3">
+								<div className="flex items-center gap-2">
+									<User className="h-5 w-5 text-stone-600" />
+									<span className="font-semibold text-stone-700">用户</span>
+									{filter.userId && (
+										<Badge className="bg-amber-500 text-white text-xs">
+											筛选中
+										</Badge>
+									)}
+								</div>
+								<Button
+									size="sm"
+									onClick={() => setCreateUserOpen(true)}
+									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+								>
+									<Plus className="h-4 w-4" />
+								</Button>
+							</div>
+							<div className="flex gap-1">
+								{renderSortButton(
+									"id",
+									userSort,
+									() => toggleUserSort("id"),
+									"ID",
+								)}
+								{renderSortButton(
+									"username",
+									userSort,
+									() => toggleUserSort("username"),
+									"用户名",
+								)}
+								{renderSortButton(
+									"email",
+									userSort,
+									() => toggleUserSort("email"),
+									"邮箱",
+								)}
+							</div>
+						</div>
+						<div className="flex-1 overflow-y-auto p-2 space-y-1">
+							{sortedUsers.length === 0 ? (
+								<div className="flex flex-col items-center justify-center py-8 text-stone-400">
+									<AlertCircle className="h-8 w-8 mb-2" />
+									<span>空</span>
+								</div>
+							) : (
+								sortedUsers.map((user) =>
+									renderListItem(
+										user.id,
+										<div className="flex-1 min-w-0">
+											<div className="flex items-center gap-2">
+												<span className="text-xs opacity-60">#{user.id}</span>
+												<span className="font-medium truncate">
+													{user.username}
+												</span>
+											</div>
+											<div className="text-xs opacity-60 truncate">
+												{user.email}
+											</div>
+										</div>,
+										filter.userId === user.id,
+										user.yn === 0,
+										() => openEditUser(user),
+										() => handleDeleteUser(user.id),
+										() => handleUserClick(user),
+									),
+								)
+							)}
+						</div>
+					</div>
+
+					{/* 组栏 */}
+					<div className="bg-[#f0ece6] rounded-2xl border border-stone-300/60 flex flex-col">
+						<div className="p-4 border-b border-stone-300/60">
+							<div className="flex items-center justify-between mb-3">
+								<div className="flex items-center gap-2">
+									<Users className="h-5 w-5 text-stone-600" />
+									<span className="font-semibold text-stone-700">组</span>
+									{filter.groupId && (
+										<Badge className="bg-amber-500 text-white text-xs">
+											筛选中
+										</Badge>
+									)}
+								</div>
+								<Button
+									size="sm"
+									onClick={() => setCreateGroupOpen(true)}
+									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+								>
+									<Plus className="h-4 w-4" />
+								</Button>
+							</div>
+							<div className="flex gap-1">
+								{renderSortButton(
+									"id",
+									groupSort,
+									() => toggleGroupSort("id"),
+									"ID",
+								)}
+								{renderSortButton(
+									"name",
+									groupSort,
+									() => toggleGroupSort("name"),
+									"名称",
+								)}
+							</div>
+						</div>
+						<div className="flex-1 overflow-y-auto p-2 space-y-1">
+							{sortedGroups.length === 0 ? (
+								<div className="flex flex-col items-center justify-center py-8 text-stone-400">
+									<AlertCircle className="h-8 w-8 mb-2" />
+									<span>空</span>
+								</div>
+							) : (
+								sortedGroups.map((group) =>
+									renderListItem(
+										group.id,
+										<div className="flex items-center gap-2">
+											<span className="text-xs opacity-60">#{group.id}</span>
+											<span className="font-medium">{group.name}</span>
+										</div>,
+										filter.groupId === group.id,
+										group.yn === 0,
+										() => openEditGroup(group),
+										() => handleDeleteGroup(group.id),
+										() => handleGroupClick(group),
+									),
+								)
+							)}
+						</div>
+					</div>
+
+					{/* 权限栏 */}
+					<div className="bg-[#f0ece6] rounded-2xl border border-stone-300/60 flex flex-col">
+						<div className="p-4 border-b border-stone-300/60">
+							<div className="flex items-center justify-between mb-3">
+								<div className="flex items-center gap-2">
+									<Shield className="h-5 w-5 text-stone-600" />
+									<span className="font-semibold text-stone-700">权限</span>
+									{filter.scopeId && (
+										<Badge className="bg-amber-500 text-white text-xs">
+											筛选中
+										</Badge>
+									)}
+								</div>
+								<Button
+									size="sm"
+									onClick={() => setCreateScopeOpen(true)}
+									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+								>
+									<Plus className="h-4 w-4" />
+								</Button>
+							</div>
+							<div className="flex gap-1">
+								{renderSortButton(
+									"id",
+									scopeSort,
+									() => toggleScopeSort("id"),
+									"ID",
+								)}
+								{renderSortButton(
+									"name",
+									scopeSort,
+									() => toggleScopeSort("name"),
+									"名称",
+								)}
+							</div>
+						</div>
+						<div className="flex-1 overflow-y-auto p-2 space-y-1">
+							{sortedScopes.length === 0 ? (
+								<div className="flex flex-col items-center justify-center py-8 text-stone-400">
+									<AlertCircle className="h-8 w-8 mb-2" />
+									<span>空</span>
+								</div>
+							) : (
+								sortedScopes.map((scope) =>
+									renderListItem(
+										scope.id,
+										<div className="flex-1 min-w-0">
+											<div className="flex items-center gap-2">
+												<span className="text-xs opacity-60">#{scope.id}</span>
+												<span className="font-medium truncate">
+													{scope.name}
+												</span>
+											</div>
+											{scope.description && (
+												<div className="text-xs opacity-60 truncate">
+													{scope.description}
+												</div>
+											)}
+										</div>,
+										filter.scopeId === scope.id,
+										scope.yn === 0,
+										() => openEditScope(scope),
+										() => handleDeleteScope(scope.id),
+										() => handleScopeClick(scope),
+									),
+								)
+							)}
+						</div>
+					</div>
+				</div>
+			</main>
+
+			{/* 筛选状态栏 */}
+			{(filter.userId || filter.groupId || filter.scopeId) && (
+				<div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[#f0ece6] border border-stone-300/60 rounded-full px-4 py-2 shadow-lg flex items-center gap-2">
+					<span className="text-sm text-stone-500">当前筛选:</span>
+					{filter.userId && (
+						<Badge className="bg-stone-600 text-white">
+							用户: {users.find((u) => u.id === filter.userId)?.username}
+						</Badge>
+					)}
+					{filter.groupId && (
+						<Badge className="bg-stone-600 text-white">
+							组: {groups.find((g) => g.id === filter.groupId)?.name}
+						</Badge>
+					)}
+					{filter.scopeId && (
+						<Badge className="bg-stone-600 text-white">
+							权限: {scopes.find((s) => s.id === filter.scopeId)?.name}
+						</Badge>
+					)}
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={clearFilter}
+						className="rounded-full"
+					>
+						<X className="h-4 w-4" />
+					</Button>
+				</div>
+			)}
+
+			{/* 创建用户弹窗 */}
+			<Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
+				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl">
+					<DialogHeader>
+						<DialogTitle className="text-stone-700">新建用户</DialogTitle>
+					</DialogHeader>
+					<form onSubmit={handleCreateUser} className="space-y-4">
+						<div className="space-y-2">
+							<Label className="text-stone-600">邮箱</Label>
+							<Input
+								type="email"
+								value={newUserEmail}
+								onChange={(e) => setNewUserEmail(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+								required
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label className="text-stone-600">用户名</Label>
+							<Input
+								value={newUserUsername}
+								onChange={(e) => setNewUserUsername(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+								required
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label className="text-stone-600">密码</Label>
+							<Input
+								type="password"
+								value={newUserPassword}
+								onChange={(e) => setNewUserPassword(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+								required
+							/>
+						</div>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setCreateUserOpen(false)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							>
+								取消
+							</Button>
+							<Button
+								type="submit"
+								disabled={createUserLoading}
+								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+							>
+								{createUserLoading && (
+									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+								)}
+								创建
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+
+			{/* 编辑用户弹窗 */}
+			<Dialog open={editUserOpen} onOpenChange={setEditUserOpen}>
+				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-md">
+					<DialogHeader>
+						<DialogTitle className="text-stone-700">编辑用户</DialogTitle>
+					</DialogHeader>
+					<form onSubmit={handleEditUser} className="space-y-4">
+						<div className="space-y-2">
+							<Label className="text-stone-600">用户名</Label>
+							<Input
+								value={editUserUsernameVal}
+								onChange={(e) => setEditUserUsernameVal(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label className="text-stone-600">邮箱</Label>
+							<Input
+								type="email"
+								value={editUserEmailVal}
+								onChange={(e) => setEditUserEmailVal(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label className="text-stone-600">密码（留空不修改）</Label>
+							<Input
+								type="password"
+								value={editUserPasswordVal}
+								onChange={(e) => setEditUserPasswordVal(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+								placeholder="留空则不修改"
+							/>
+						</div>
+						<div className="flex items-center justify-between">
+							<Label className="text-stone-600">启用状态</Label>
+							<SwitchUI
+								checked={editUserYn === 1}
+								onCheckedChange={(checked) => setEditUserYn(checked ? 1 : 0)}
+							/>
+						</div>
+						{renderRelationSelector(
+							"所属组",
+							groups.map((g) => ({ id: g.id, name: g.name })),
+							editUserGroups,
+							setEditUserGroups,
+						)}
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setEditUserOpen(false)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							>
+								取消
+							</Button>
+							<Button
+								type="submit"
+								disabled={editUserLoading}
+								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+							>
+								{editUserLoading && (
+									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+								)}
+								保存
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+
+			{/* 创建组弹窗 */}
+			<Dialog open={createGroupOpen} onOpenChange={setCreateGroupOpen}>
+				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl">
+					<DialogHeader>
+						<DialogTitle className="text-stone-700">新建组</DialogTitle>
+					</DialogHeader>
+					<form onSubmit={handleCreateGroup} className="space-y-4">
+						<div className="space-y-2">
+							<Label className="text-stone-600">组名</Label>
+							<Input
+								value={newGroupName}
+								onChange={(e) => setNewGroupName(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+								required
+							/>
+						</div>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setCreateGroupOpen(false)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							>
+								取消
+							</Button>
+							<Button
+								type="submit"
+								disabled={createGroupLoading}
+								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+							>
+								{createGroupLoading && (
+									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+								)}
+								创建
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+
+			{/* 编辑组弹窗 */}
+			<Dialog open={editGroupOpen} onOpenChange={setEditGroupOpen}>
+				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-md">
+					<DialogHeader>
+						<DialogTitle className="text-stone-700">编辑组</DialogTitle>
+					</DialogHeader>
+					<form onSubmit={handleEditGroup} className="space-y-4">
+						<div className="space-y-2">
+							<Label className="text-stone-600">组名</Label>
+							<Input
+								value={editGroupNameVal}
+								onChange={(e) => setEditGroupNameVal(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							/>
+						</div>
+						<div className="flex items-center justify-between">
+							<Label className="text-stone-600">启用状态</Label>
+							<SwitchUI
+								checked={editGroupYn === 1}
+								onCheckedChange={(checked) => setEditGroupYn(checked ? 1 : 0)}
+							/>
+						</div>
+						{renderRelationSelector(
+							"成员用户",
+							users.map((u) => ({ id: u.id, name: u.username })),
+							editGroupUsers,
+							setEditGroupUsers,
+						)}
+						{renderRelationSelector(
+							"包含权限",
+							scopes.map((s) => ({ id: s.id, name: s.name })),
+							editGroupScopes,
+							setEditGroupScopes,
+						)}
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setEditGroupOpen(false)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							>
+								取消
+							</Button>
+							<Button
+								type="submit"
+								disabled={editGroupLoading}
+								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+							>
+								{editGroupLoading && (
+									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+								)}
+								保存
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+
+			{/* 创建权限弹窗 */}
+			<Dialog open={createScopeOpen} onOpenChange={setCreateScopeOpen}>
+				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl">
+					<DialogHeader>
+						<DialogTitle className="text-stone-700">新建权限</DialogTitle>
+					</DialogHeader>
+					<form onSubmit={handleCreateScope} className="space-y-4">
+						<div className="space-y-2">
+							<Label className="text-stone-600">权限名</Label>
+							<Input
+								value={newScopeName}
+								onChange={(e) => setNewScopeName(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+								required
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label className="text-stone-600">描述</Label>
+							<Input
+								value={newScopeDesc}
+								onChange={(e) => setNewScopeDesc(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							/>
+						</div>
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setCreateScopeOpen(false)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							>
+								取消
+							</Button>
+							<Button
+								type="submit"
+								disabled={createScopeLoading}
+								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+							>
+								{createScopeLoading && (
+									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+								)}
+								创建
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+
+			{/* 编辑权限弹窗 */}
+			<Dialog open={editScopeOpen} onOpenChange={setEditScopeOpen}>
+				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-md">
+					<DialogHeader>
+						<DialogTitle className="text-stone-700">编辑权限</DialogTitle>
+					</DialogHeader>
+					<form onSubmit={handleEditScope} className="space-y-4">
+						<div className="space-y-2">
+							<Label className="text-stone-600">权限名</Label>
+							<Input
+								value={editScopeNameVal}
+								onChange={(e) => setEditScopeNameVal(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							/>
+						</div>
+						<div className="space-y-2">
+							<Label className="text-stone-600">描述</Label>
+							<Input
+								value={editScopeDescVal}
+								onChange={(e) => setEditScopeDescVal(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							/>
+						</div>
+						<div className="flex items-center justify-between">
+							<Label className="text-stone-600">启用状态</Label>
+							<SwitchUI
+								checked={editScopeYn === 1}
+								onCheckedChange={(checked) => setEditScopeYn(checked ? 1 : 0)}
+							/>
+						</div>
+						{renderRelationSelector(
+							"所属组",
+							groups.map((g) => ({ id: g.id, name: g.name })),
+							editScopeGroups,
+							setEditScopeGroups,
+						)}
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setEditScopeOpen(false)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							>
+								取消
+							</Button>
+							<Button
+								type="submit"
+								disabled={editScopeLoading}
+								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+							>
+								{editScopeLoading && (
+									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+								)}
+								保存
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+		</div>
+	);
 }

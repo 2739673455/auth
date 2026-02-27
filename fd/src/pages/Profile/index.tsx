@@ -217,11 +217,10 @@ export default function Profile() {
 		try {
 			const data: UpdateEmailRequest = { email: newEmail, code: emailCode };
 			await userApi.updateEmail(data);
-			toast.success("邮箱修改成功，请重新登录");
-			setTimeout(async () => {
-				await logout();
-				navigate("/login");
-			}, 2000);
+			toast.success("邮箱修改成功");
+			const response = await userApi.getMe();
+			setUser(response.data);
+			closeAllEdits();
 		} catch (error: any) {
 			handleApiError(error, "修改失败");
 		} finally {
