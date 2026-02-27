@@ -1,401 +1,364 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Layout,
-  Menu,
-  Card,
-  Form,
-  Input,
-  Button,
-  message,
-  Typography,
-  Descriptions,
-  Tag,
-  Divider,
-  Statistic,
-} from 'antd';
-import type { StatisticProps } from 'antd';
-import {
-  UserOutlined,
-  TeamOutlined,
-  LogoutOutlined,
-  SettingOutlined,
-  MailOutlined,
-  LockOutlined,
-  SafetyOutlined,
-} from '@ant-design/icons';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { User, Settings, LogOut, Mail, Lock, Shield, Loader2 } from 'lucide-react';
 import { userApi } from '../../api/user';
 import { useAuthStore } from '../../stores/authStore';
 import type { UpdateEmailRequest, SendCodeRequest, UpdatePasswordRequest } from '../../types';
 
-const { Header, Sider, Content } = Layout;
-const { Title } = Typography;
-const { Countdown } = Statistic;
-
 export default function Profile() {
   const navigate = useNavigate();
   const { user, logout, hasScope, setUser } = useAuthStore();
-  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
-  const [userForm] = Form.useForm();
 
-  // 修改邮箱相关
-  const [emailForm] = Form.useForm();
+  // 修改用户名
+  const [username, setUsername] = useState(user?.username || '');
+  const [loading, setLoading] = useState(false);
+
+  // 修改邮箱
+  const [newEmail, setNewEmail] = useState('');
+  const [emailCode, setEmailCode] = useState('');
   const [sendingEmailCode, setSendingEmailCode] = useState(false);
-  const [emailCountdown, setEmailCountdown] = useState<number | null>(null);
+  const [emailCountdown, setEmailCountdown] = useState(0);
   const [emailLoading, setEmailLoading] = useState(false);
 
-  // 修改密码相关
-  const [passwordForm] = Form.useForm();
+  // 修改密码
+  const [passwordCode, setPasswordCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [sendingPasswordCode, setSendingPasswordCode] = useState(false);
-  const [passwordCountdown, setPasswordCountdown] = useState<number | null>(null);
+  const [passwordCountdown, setPasswordCountdown] = useState(0);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
-      userForm.setFieldsValue({ username: user.username });
+      setUsername(user.username);
     }
-  }, [user, userForm]);
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
-    message.success('已登出');
+    toast.success('已登出');
     navigate('/login');
   };
 
-  const updateUsername = async (values: { username: string }) => {
+  const updateUsername = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim()) {
+      toast.error('请输入用户名');
+      return;
+    }
     setLoading(true);
     try {
-      await userApi.updateUsername(values);
-      message.success('用户名修改成功');
-      // 刷新用户信息
+      await userApi.updateUsername({ username });
+      toast.success('用户名修改成功');
       const response = await userApi.getMe();
       setUser(response.data);
     } catch (error: any) {
       const msg = error.response?.data?.detail || '修改失败';
-      message.error(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // 发送修改邮箱验证码
   const sendEmailCode = async () => {
-    const email = emailForm.getFieldValue('email');
-    if (!email) {
-      message.error('请先输入新邮箱');
+    if (!newEmail) {
+      toast.error('请先输入新邮箱');
       return;
     }
-
     setSendingEmailCode(true);
     try {
-      const data: SendCodeRequest = { email, type: 'reset_email' };
+      const data: SendCodeRequest = { email: newEmail, type: 'reset_email' };
       await userApi.sendEmailCode(data);
-      message.success('验证码已发送到新邮箱');
-      setEmailCountdown(Date.now() + 60000);
+      toast.success('验证码已发送到新邮箱');
+      setEmailCountdown(60);
+      const timer = setInterval(() => {
+        setEmailCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (error: any) {
       const msg = error.response?.data?.detail || '发送失败';
-      message.error(msg);
+      toast.error(msg);
     } finally {
       setSendingEmailCode(false);
     }
   };
 
-  // 修改邮箱
-  const updateEmail = async (values: UpdateEmailRequest) => {
+  const updateEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailCode || emailCode.length !== 6) {
+      toast.error('请输入6位验证码');
+      return;
+    }
     setEmailLoading(true);
     try {
-      await userApi.updateEmail(values);
-      message.success('邮箱修改成功，请重新登录');
-
-      // 等待2秒后登出并跳转到登录页
+      const data: UpdateEmailRequest = { email: newEmail, code: emailCode };
+      await userApi.updateEmail(data);
+      toast.success('邮箱修改成功，请重新登录');
       setTimeout(async () => {
         await logout();
         navigate('/login');
       }, 2000);
     } catch (error: any) {
       const msg = error.response?.data?.detail || '修改失败';
-      message.error(msg);
+      toast.error(msg);
     } finally {
       setEmailLoading(false);
     }
   };
 
-  // 发送修改密码验证码
   const sendPasswordCode = async () => {
     if (!user?.email) {
-      message.error('用户邮箱不存在');
+      toast.error('用户邮箱不存在');
       return;
     }
-
     setSendingPasswordCode(true);
     try {
       const data: SendCodeRequest = { email: user.email, type: 'reset_password' };
       await userApi.sendEmailCode(data);
-      message.success('验证码已发送到您的邮箱');
-      setPasswordCountdown(Date.now() + 60000);
+      toast.success('验证码已发送到您的邮箱');
+      setPasswordCountdown(60);
+      const timer = setInterval(() => {
+        setPasswordCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (error: any) {
       const msg = error.response?.data?.detail || '发送失败';
-      message.error(msg);
+      toast.error(msg);
     } finally {
       setSendingPasswordCode(false);
     }
   };
 
-  // 修改密码
-  const updatePassword = async (values: any) => {
+  const updatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!user?.email) {
-      message.error('用户邮箱不存在');
+      toast.error('用户邮箱不存在');
       return;
     }
-
+    if (newPassword !== confirmPassword) {
+      toast.error('两次输入的密码不一致');
+      return;
+    }
     setPasswordLoading(true);
     try {
       const data: UpdatePasswordRequest = {
         email: user.email,
-        code: values.code,
-        password: values.password,
+        code: passwordCode,
+        password: newPassword,
       };
       await userApi.updatePassword(data);
-      message.success('密码修改成功，请重新登录');
-
-      // 等待2秒后登出并跳转到登录页
+      toast.success('密码修改成功，请重新登录');
       setTimeout(async () => {
         await logout();
         navigate('/login');
       }, 2000);
     } catch (error: any) {
       const msg = error.response?.data?.detail || '修改失败';
-      message.error(msg);
+      toast.error(msg);
     } finally {
       setPasswordLoading(false);
     }
   };
 
-  // 倒计时渲染器
-  const countdownRenderer: StatisticProps['valueRender'] = (value) => {
-    if (typeof value !== 'number') return null;
-    const seconds = Math.ceil((value - Date.now()) / 1000);
-    return <span>{seconds}s</span>;
-  };
-
   const menuItems = [
-    {
-      key: 'info',
-      icon: <UserOutlined />,
-      label: '个人信息',
-    },
-    {
-      key: 'settings',
-      icon: <SettingOutlined />,
-      label: '账号设置',
-    },
-    ...(hasScope('*') || hasScope('admin')
-      ? [
-          {
-            key: 'admin',
-            icon: <TeamOutlined />,
-            label: '管理后台',
-          },
-        ]
-      : []),
+    { key: 'info', icon: User, label: '个人信息' },
+    { key: 'settings', icon: Settings, label: '账号设置' },
+    ...(hasScope('*') || hasScope('admin') ? [{ key: 'admin', icon: Settings, label: '管理后台' }] : []),
   ];
-
-  const handleMenuClick = ({ key }: { key: string }) => {
-    if (key === 'admin') {
-      navigate('/admin');
-    } else {
-      setActiveTab(key);
-    }
-  };
 
   const renderContent = () => {
     if (activeTab === 'info') {
       return (
-        <Card title="个人信息">
-          <Descriptions bordered column={1}>
-            <Descriptions.Item label="用户名">{user?.username}</Descriptions.Item>
-            <Descriptions.Item label="邮箱">{user?.email}</Descriptions.Item>
-            <Descriptions.Item label="用户组">
-              {user?.groups.map((group) => (
-                <Tag key={group} color="blue">
-                  {group}
-                </Tag>
-              ))}
-            </Descriptions.Item>
-          </Descriptions>
+        <Card>
+          <CardHeader>
+            <CardTitle>个人信息</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-[100px_1fr] gap-4 items-center">
+              <span className="text-muted-foreground">用户名</span>
+              <span>{user?.username}</span>
+            </div>
+            <Separator />
+            <div className="grid grid-cols-[100px_1fr] gap-4 items-center">
+              <span className="text-muted-foreground">邮箱</span>
+              <span>{user?.email}</span>
+            </div>
+            <Separator />
+            <div className="grid grid-cols-[100px_1fr] gap-4 items-start">
+              <span className="text-muted-foreground">用户组</span>
+              <div className="flex flex-wrap gap-2">
+                {user?.groups.map((group) => (
+                  <Badge key={group} variant="secondary">{group}</Badge>
+                ))}
+              </div>
+            </div>
+          </CardContent>
         </Card>
       );
     }
 
     if (activeTab === 'settings') {
       return (
-        <>
-          <Card title="修改用户名" style={{ marginBottom: 24 }}>
-            <Form form={userForm} onFinish={updateUsername} layout="vertical">
-              <Form.Item
-                name="username"
-                label="新用户名"
-                rules={[
-                  { required: true, message: '请输入用户名' },
-                  { min: 1, max: 50, message: '用户名长度1-50个字符' },
-                ]}
-              >
-                <Input placeholder="请输入新用户名" />
-              </Form.Item>
-              <Form.Item>
-                <Button type="primary" htmlType="submit" loading={loading}>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>修改用户名</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={updateUsername} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">新用户名</Label>
+                  <Input
+                    id="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    minLength={1}
+                    maxLength={50}
+                  />
+                </div>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   保存
                 </Button>
-              </Form.Item>
-            </Form>
+              </form>
+            </CardContent>
           </Card>
 
-          <Divider />
-
-          <Card title="修改邮箱" style={{ marginBottom: 24 }}>
-            <p style={{ color: '#999', marginBottom: 16 }}>
-              修改邮箱需要验证新邮箱，修改后会重新登录
-            </p>
-            <Form form={emailForm} onFinish={updateEmail} layout="vertical">
-              <Form.Item
-                name="email"
-                label="新邮箱"
-                rules={[
-                  { required: true, message: '请输入新邮箱' },
-                  { type: 'email', message: '请输入有效的邮箱地址' },
-                ]}
-              >
-                <Input
-                  prefix={<MailOutlined />}
-                  placeholder="请输入新邮箱"
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="code"
-                label="验证码"
-                rules={[
-                  { required: true, message: '请输入验证码' },
-                  { len: 6, message: '验证码为6位数字' },
-                ]}
-              >
-                <Input
-                  prefix={<SafetyOutlined />}
-                  placeholder="请输入验证码"
-                  suffix={
-                    emailCountdown ? (
-                      <Countdown
-                        value={emailCountdown}
-                        format="ss"
-                        valueRender={countdownRenderer}
-                        onFinish={() => setEmailCountdown(null)}
+          <Card>
+            <CardHeader>
+              <CardTitle>修改邮箱</CardTitle>
+              <CardDescription>修改邮箱需要验证新邮箱，修改后会重新登录</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={updateEmail} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="newEmail">新邮箱</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="newEmail"
+                      type="email"
+                      className="pl-10"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="emailCode">验证码</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Shield className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="emailCode"
+                        className="pl-10"
+                        value={emailCode}
+                        onChange={(e) => setEmailCode(e.target.value)}
+                        maxLength={6}
                       />
-                    ) : (
-                      <Button
-                        type="link"
-                        size="small"
-                        loading={sendingEmailCode}
-                        onClick={sendEmailCode}
-                      >
-                        获取验证码
-                      </Button>
-                    )
-                  }
-                />
-              </Form.Item>
-
-              <Form.Item>
-                <Button type="primary" htmlType="submit" loading={emailLoading}>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={sendEmailCode}
+                      disabled={sendingEmailCode || emailCountdown > 0}
+                    >
+                      {emailCountdown > 0 ? `${emailCountdown}s` : sendingEmailCode ? <Loader2 className="h-4 w-4 animate-spin" /> : '获取验证码'}
+                    </Button>
+                  </div>
+                </div>
+                <Button type="submit" disabled={emailLoading}>
+                  {emailLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   修改邮箱
                 </Button>
-              </Form.Item>
-            </Form>
+              </form>
+            </CardContent>
           </Card>
 
-          <Divider />
-
-          <Card title="修改密码" style={{ marginBottom: 24 }}>
-            <p style={{ color: '#999', marginBottom: 16 }}>
-              修改密码需要邮箱验证码，验证码将发送到当前邮箱：{user?.email}
-            </p>
-            <Form form={passwordForm} onFinish={updatePassword} layout="vertical">
-              <Form.Item
-                name="code"
-                label="验证码"
-                rules={[
-                  { required: true, message: '请输入验证码' },
-                  { len: 6, message: '验证码为6位数字' },
-                ]}
-              >
-                <Input
-                  prefix={<SafetyOutlined />}
-                  placeholder="请输入验证码"
-                  suffix={
-                    passwordCountdown ? (
-                      <Countdown
-                        value={passwordCountdown}
-                        format="ss"
-                        valueRender={countdownRenderer}
-                        onFinish={() => setPasswordCountdown(null)}
+          <Card>
+            <CardHeader>
+              <CardTitle>修改密码</CardTitle>
+              <CardDescription>验证码将发送到当前邮箱：{user?.email}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={updatePassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="passwordCode">验证码</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Shield className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="passwordCode"
+                        className="pl-10"
+                        value={passwordCode}
+                        onChange={(e) => setPasswordCode(e.target.value)}
+                        maxLength={6}
                       />
-                    ) : (
-                      <Button
-                        type="link"
-                        size="small"
-                        loading={sendingPasswordCode}
-                        onClick={sendPasswordCode}
-                      >
-                        获取验证码
-                      </Button>
-                    )
-                  }
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="password"
-                label="新密码"
-                rules={[
-                  { required: true, message: '请输入新密码' },
-                  { min: 6, max: 128, message: '密码长度6-128个字符' },
-                ]}
-              >
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder="请输入新密码"
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="confirmPassword"
-                dependencies={['password']}
-                rules={[
-                  { required: true, message: '请确认密码' },
-                  ({ getFieldValue }) => ({
-                    validator(_, value) {
-                      if (!value || getFieldValue('password') === value) {
-                        return Promise.resolve();
-                      }
-                      return Promise.reject(new Error('两次输入的密码不一致'));
-                    },
-                  }),
-                ]}
-              >
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder="请确认新密码"
-                />
-              </Form.Item>
-
-              <Form.Item>
-                <Button type="primary" htmlType="submit" loading={passwordLoading}>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={sendPasswordCode}
+                      disabled={sendingPasswordCode || passwordCountdown > 0}
+                    >
+                      {passwordCountdown > 0 ? `${passwordCountdown}s` : sendingPasswordCode ? <Loader2 className="h-4 w-4 animate-spin" /> : '获取验证码'}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">新密码</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      className="pl-10"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      minLength={6}
+                      maxLength={128}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">确认密码</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      className="pl-10"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <Button type="submit" disabled={passwordLoading}>
+                  {passwordLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   修改密码
                 </Button>
-              </Form.Item>
-            </Form>
+              </form>
+            </CardContent>
           </Card>
-        </>
+        </div>
       );
     }
 
@@ -403,28 +366,37 @@ export default function Profile() {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider theme="light" width={200}>
-        <div style={{ padding: 16, textAlign: 'center' }}>
-          <Title level={4}>用户中心</Title>
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[activeTab]}
-          items={menuItems}
-          onClick={handleMenuClick}
-          style={{ height: '100%', borderRight: 0 }}
-        />
-      </Sider>
-      <Layout>
-        <Header style={{ background: '#fff', padding: '0 24px', textAlign: 'right' }}>
-          <span style={{ marginRight: 16 }}>欢迎, {user?.username}</span>
-          <Button icon={<LogoutOutlined />} onClick={handleLogout}>
+    <div className="min-h-screen flex">
+      <aside className="w-64 border-r bg-muted/50">
+        <div className="p-4 text-center font-semibold text-lg">用户中心</div>
+        <nav className="space-y-1 p-2">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.key}
+                onClick={() => item.key === 'admin' ? navigate('/admin') : setActiveTab(item.key)}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                  activeTab === item.key ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+      <div className="flex-1 flex flex-col">
+        <header className="h-14 border-b bg-background flex items-center justify-between px-6">
+          <span>欢迎, {user?.username}</span>
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
             登出
           </Button>
-        </Header>
-        <Content style={{ padding: 24 }}>{renderContent()}</Content>
-      </Layout>
-    </Layout>
+        </header>
+        <main className="flex-1 p-6">{renderContent()}</main>
+      </div>
+    </div>
   );
 }
