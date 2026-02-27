@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { UserResponse } from '../types';
 import { userApi } from '../api/user';
+import type { UserResponse } from '../types';
 
 interface AuthState {
   // 状态

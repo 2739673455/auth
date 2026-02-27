@@ -1,28 +1,28 @@
-import apiClient from './client';
 import type {
+  BatchAddGroupScopeRequest,
+  BatchAddUserGroupRequest,
+  BatchRemoveGroupScopeRequest,
+  BatchRemoveUserGroupRequest,
+  CreateGroupRequest,
+  CreateScopeRequest,
   CreateUserRequest,
-  UpdateUserRequest,
+  GroupDetailResponse,
+  GroupInfo,
+  GroupListResponse,
+  RemoveGroupRequest,
+  RemoveScopeRequest,
   RemoveUserRequest,
-  UserListResponse,
+  ScopeDetailResponse,
+  ScopeInfo,
+  ScopeListResponse,
+  UpdateGroupRequest,
+  UpdateScopeRequest,
+  UpdateUserRequest,
   UserDetailResponse,
   UserInfo,
-  CreateGroupRequest,
-  UpdateGroupRequest,
-  RemoveGroupRequest,
-  GroupListResponse,
-  GroupInfo,
-  GroupDetailResponse,
-  CreateScopeRequest,
-  UpdateScopeRequest,
-  RemoveScopeRequest,
-  ScopeListResponse,
-  ScopeInfo,
-  ScopeDetailResponse,
-  BatchAddUserGroupRequest,
-  BatchRemoveUserGroupRequest,
-  BatchAddGroupScopeRequest,
-  BatchRemoveGroupScopeRequest,
+  UserListResponse,
 } from '../types';
+import apiClient from './client';
 
 // 用户管理
 export const adminUserApi = {
@@ -33,20 +33,17 @@ export const adminUserApi = {
     }),
 
   // 更新用户
-  updateUser: (data: UpdateUserRequest) =>
-    apiClient.post<void>('/api/admin/update_user', data),
+  updateUser: (data: UpdateUserRequest) => apiClient.post<void>('/api/admin/update_user', data),
 
   // 删除用户
-  removeUser: (data: RemoveUserRequest) =>
-    apiClient.post<void>('/api/admin/remove_user', data),
+  removeUser: (data: RemoveUserRequest) => apiClient.post<void>('/api/admin/remove_user', data),
 
   // 查询用户列表
   listUsers: (params: { offset?: number; limit?: number; keyword?: string }) =>
     apiClient.get<UserListResponse>('/api/admin/list_users', { params }),
 
   // 查询用户详情
-  getUser: (userId: number) =>
-    apiClient.get<UserDetailResponse>(`/api/admin/user/${userId}`),
+  getUser: (userId: number) => apiClient.get<UserDetailResponse>(`/api/admin/user/${userId}`),
 };
 
 // 组管理
@@ -62,16 +59,14 @@ export const adminGroupApi = {
     apiClient.post<GroupInfo>('/api/admin/update_group', data),
 
   // 删除组
-  removeGroup: (data: RemoveGroupRequest) =>
-    apiClient.post<void>('/api/admin/remove_group', data),
+  removeGroup: (data: RemoveGroupRequest) => apiClient.post<void>('/api/admin/remove_group', data),
 
   // 查询组列表
   listGroups: (params: { offset?: number; limit?: number; keyword?: string }) =>
     apiClient.get<GroupListResponse>('/api/admin/list_groups', { params }),
 
   // 查询组详情
-  getGroup: (groupId: number) =>
-    apiClient.get<GroupDetailResponse>(`/api/admin/group/${groupId}`),
+  getGroup: (groupId: number) => apiClient.get<GroupDetailResponse>(`/api/admin/group/${groupId}`),
 };
 
 // 权限管理
@@ -87,16 +82,14 @@ export const adminScopeApi = {
     apiClient.post<ScopeInfo>('/api/admin/update_scope', data),
 
   // 删除权限
-  removeScope: (data: RemoveScopeRequest) =>
-    apiClient.post<void>('/api/admin/remove_scope', data),
+  removeScope: (data: RemoveScopeRequest) => apiClient.post<void>('/api/admin/remove_scope', data),
 
   // 查询权限列表
   listScopes: (params: { offset?: number; limit?: number; keyword?: string }) =>
     apiClient.get<ScopeListResponse>('/api/admin/list_scopes', { params }),
 
   // 查询权限详情
-  getScope: (scopeId: number) =>
-    apiClient.get<ScopeDetailResponse>(`/api/admin/scope/${scopeId}`),
+  getScope: (scopeId: number) => apiClient.get<ScopeDetailResponse>(`/api/admin/scope/${scopeId}`),
 };
 
 // 关联关系管理

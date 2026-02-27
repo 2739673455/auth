@@ -46,9 +46,8 @@ def validation_error_handler(
     code = 422
     exc_type = "ValidationError"
     message = "参数校验失败"
-    detail = str(
-        [{"type": e["type"], "loc": e["loc"], "msg": e["msg"]} for e in exc.errors()]
-    )
+    errors = [e["msg"] for e in exc.errors()]
+    detail = errors[0] if len(errors) == 1 else str(errors)
 
     logger.warning(message, code=code, exc_type=exc_type, detail=detail)
     return _build_response(

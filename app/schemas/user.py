@@ -60,6 +60,15 @@ class LoginRequest(BaseModel):
     email: EmailStr = Field(..., description="邮箱")
     password: str = Field(..., description="密码")
 
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError("密码不少于6个字符")
+        if len(v) > 128:
+            raise ValueError("密码不超过128个字符")
+        return v
+
 
 class UpdateUsernameRequest(BaseModel):
     username: str = Field(..., description="新用户名")

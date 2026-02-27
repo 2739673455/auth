@@ -1,18 +1,38 @@
-import { useState, useEffect, useCallback } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { ArrowLeft, Edit, Plus, Search, Shield, Trash2, User, Users, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, User, Users, Shield, Plus, Search, Edit, Trash2, X } from 'lucide-react';
-import { adminUserApi, adminGroupApi, adminScopeApi } from '../../api/admin';
+import { adminGroupApi, adminScopeApi, adminUserApi } from '../../api/admin';
 import { useAuthStore } from '../../stores/authStore';
 
-interface UserInfo { id: number; username: string; email: string; yn: number; }
-interface GroupInfo { id: number; name: string; yn: number; }
-interface ScopeInfo { id: number; name: string; yn: number; }
+interface UserInfo {
+  id: number;
+  username: string;
+  email: string;
+  yn: number;
+}
+interface GroupInfo {
+  id: number;
+  name: string;
+  yn: number;
+}
+interface ScopeInfo {
+  id: number;
+  name: string;
+  yn: number;
+}
 
 interface FilterState {
   userId: number | null;
@@ -23,7 +43,7 @@ interface FilterState {
 export default function AdminPanel() {
   const navigate = useNavigate();
   const { logout } = useAuthStore();
-  
+
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [scopes, setScopes] = useState<ScopeInfo[]>([]);
@@ -126,18 +146,36 @@ export default function AdminPanel() {
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
-                  <TableRow 
-                    key={user.id} 
-                    className={filter.userId === user.id ? 'bg-blue-50' : user.yn === 0 ? 'opacity-50' : ''}
-                    onClick={() => setFilter(f => ({ ...f, userId: f.userId === user.id ? null : user.id }))}
+                  <TableRow
+                    key={user.id}
+                    className={
+                      filter.userId === user.id ? 'bg-blue-50' : user.yn === 0 ? 'opacity-50' : ''
+                    }
+                    onClick={() =>
+                      setFilter((f) => ({ ...f, userId: f.userId === user.id ? null : user.id }))
+                    }
                   >
                     <TableCell>{user.id}</TableCell>
                     <TableCell>{user.username}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); toast.info('编辑功能待实现'); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toast.info('编辑功能待实现');
+                        }}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteUser(user.id); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteUser(user.id);
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -152,8 +190,7 @@ export default function AdminPanel() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              组
+              <Users className="h-5 w-5" />组
               {filter.groupId && <Badge variant="secondary">筛选中</Badge>}
             </CardTitle>
             <Button size="sm" onClick={() => toast.info('新建组功能待实现')}>
@@ -177,18 +214,43 @@ export default function AdminPanel() {
               </TableHeader>
               <TableBody>
                 {groups.map((group) => (
-                  <TableRow 
+                  <TableRow
                     key={group.id}
-                    className={filter.groupId === group.id ? 'bg-blue-50' : group.yn === 0 ? 'opacity-50' : ''}
-                    onClick={() => setFilter(f => ({ ...f, groupId: f.groupId === group.id ? null : group.id }))}
+                    className={
+                      filter.groupId === group.id
+                        ? 'bg-blue-50'
+                        : group.yn === 0
+                          ? 'opacity-50'
+                          : ''
+                    }
+                    onClick={() =>
+                      setFilter((f) => ({
+                        ...f,
+                        groupId: f.groupId === group.id ? null : group.id,
+                      }))
+                    }
                   >
                     <TableCell>{group.id}</TableCell>
                     <TableCell>{group.name}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); toast.info('编辑功能待实现'); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toast.info('编辑功能待实现');
+                        }}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteGroup(group.id);
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -228,18 +290,43 @@ export default function AdminPanel() {
               </TableHeader>
               <TableBody>
                 {scopes.map((scope) => (
-                  <TableRow 
+                  <TableRow
                     key={scope.id}
-                    className={filter.scopeId === scope.id ? 'bg-blue-50' : scope.yn === 0 ? 'opacity-50' : ''}
-                    onClick={() => setFilter(f => ({ ...f, scopeId: f.scopeId === scope.id ? null : scope.id }))}
+                    className={
+                      filter.scopeId === scope.id
+                        ? 'bg-blue-50'
+                        : scope.yn === 0
+                          ? 'opacity-50'
+                          : ''
+                    }
+                    onClick={() =>
+                      setFilter((f) => ({
+                        ...f,
+                        scopeId: f.scopeId === scope.id ? null : scope.id,
+                      }))
+                    }
                   >
                     <TableCell>{scope.id}</TableCell>
                     <TableCell>{scope.name}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); toast.info('编辑功能待实现'); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toast.info('编辑功能待实现');
+                        }}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteScope(scope.id); }}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteScope(scope.id);
+                        }}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -255,10 +342,18 @@ export default function AdminPanel() {
       {(filter.userId || filter.groupId || filter.scopeId) && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-background border rounded-full px-4 py-2 shadow-lg flex items-center gap-2">
           <span className="text-sm text-muted-foreground">当前筛选:</span>
-          {filter.userId && <Badge>用户: {users.find(u => u.id === filter.userId)?.username}</Badge>}
-          {filter.groupId && <Badge>组: {groups.find(g => g.id === filter.groupId)?.name}</Badge>}
-          {filter.scopeId && <Badge>权限: {scopes.find(s => s.id === filter.scopeId)?.name}</Badge>}
-          <Button variant="ghost" size="sm" onClick={() => setFilter({ userId: null, groupId: null, scopeId: null })}>
+          {filter.userId && (
+            <Badge>用户: {users.find((u) => u.id === filter.userId)?.username}</Badge>
+          )}
+          {filter.groupId && <Badge>组: {groups.find((g) => g.id === filter.groupId)?.name}</Badge>}
+          {filter.scopeId && (
+            <Badge>权限: {scopes.find((s) => s.id === filter.scopeId)?.name}</Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFilter({ userId: null, groupId: null, scopeId: null })}
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>

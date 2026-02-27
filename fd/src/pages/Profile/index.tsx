@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Loader2, Lock, LogOut, Mail, Settings, Shield, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { User, Settings, LogOut, Mail, Lock, Shield, Loader2 } from 'lucide-react';
 import { userApi } from '../../api/user';
 import { useAuthStore } from '../../stores/authStore';
-import type { UpdateEmailRequest, SendCodeRequest, UpdatePasswordRequest } from '../../types';
+import type { SendCodeRequest, UpdateEmailRequest, UpdatePasswordRequest } from '../../types';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -181,7 +181,9 @@ export default function Profile() {
   const menuItems = [
     { key: 'info', icon: User, label: '个人信息' },
     { key: 'settings', icon: Settings, label: '账号设置' },
-    ...(hasScope('*') || hasScope('admin') ? [{ key: 'admin', icon: Settings, label: '管理后台' }] : []),
+    ...(hasScope('*') || hasScope('admin')
+      ? [{ key: 'admin', icon: Settings, label: '管理后台' }]
+      : []),
   ];
 
   const renderContent = () => {
@@ -206,7 +208,9 @@ export default function Profile() {
               <span className="text-muted-foreground">用户组</span>
               <div className="flex flex-wrap gap-2">
                 {user?.groups.map((group) => (
-                  <Badge key={group} variant="secondary">{group}</Badge>
+                  <Badge key={group} variant="secondary">
+                    {group}
+                  </Badge>
                 ))}
               </div>
             </div>
@@ -281,7 +285,13 @@ export default function Profile() {
                       onClick={sendEmailCode}
                       disabled={sendingEmailCode || emailCountdown > 0}
                     >
-                      {emailCountdown > 0 ? `${emailCountdown}s` : sendingEmailCode ? <Loader2 className="h-4 w-4 animate-spin" /> : '获取验证码'}
+                      {emailCountdown > 0 ? (
+                        `${emailCountdown}s`
+                      ) : sendingEmailCode ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        '获取验证码'
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -319,7 +329,13 @@ export default function Profile() {
                       onClick={sendPasswordCode}
                       disabled={sendingPasswordCode || passwordCountdown > 0}
                     >
-                      {passwordCountdown > 0 ? `${passwordCountdown}s` : sendingPasswordCode ? <Loader2 className="h-4 w-4 animate-spin" /> : '获取验证码'}
+                      {passwordCountdown > 0 ? (
+                        `${passwordCountdown}s`
+                      ) : sendingPasswordCode ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        '获取验证码'
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -375,7 +391,7 @@ export default function Profile() {
             return (
               <button
                 key={item.key}
-                onClick={() => item.key === 'admin' ? navigate('/admin') : setActiveTab(item.key)}
+                onClick={() => (item.key === 'admin' ? navigate('/admin') : setActiveTab(item.key))}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
                   activeTab === item.key ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                 }`}
