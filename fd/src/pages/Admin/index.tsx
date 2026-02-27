@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Layout,
@@ -14,6 +14,9 @@ import {
   Typography,
   Switch,
   Transfer,
+  Divider,
+  Tooltip,
+  Badge,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -23,79 +26,168 @@ import {
   PlusOutlined,
   SearchOutlined,
   ReloadOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  LinkOutlined,
+  ClearOutlined,
 } from '@ant-design/icons';
 import { adminUserApi, adminGroupApi, adminScopeApi, adminRelationApi } from '../../api/admin';
 import type { UserInfo, GroupInfo, ScopeInfo } from '../../types';
 
 const { Header, Content } = Layout;
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
-interface SelectedUser extends UserInfo {
-  groups?: GroupInfo[];
-  scopes?: ScopeInfo[];
+// 筛选状态类型
+interface FilterState {
+  userId: number | null;
+  groupId: number | null;
+  scopeId: number | null;
 }
 
-interface SelectedGroup extends GroupInfo {
-  scopes?: ScopeInfo[];
+// 排序类型
+interface SortState {
+  field: string;
+  order: 'ascend' | 'descend' | null;
 }
 
 export default function AdminPanel() {
   const navigate = useNavigate();
-  
-  // 全部数据
+
+  // ========== 数据状态 ==========
   const [users, setUsers] = useState<UserInfo[]>([]);
-  const [allGroups, setAllGroups] = useState<GroupInfo[]>([]);
-  const [allScopes, setAllScopes] = useState<ScopeInfo[]>([]);
-  
-  // 加载状态
+  const [groups, setGroups] = useState<GroupInfo[]>([]);
+  const [scopes, setScopes] = useState<ScopeInfo[]>([]);
+
+  // 原始关联数据（用于筛选逻辑）
+  const [userGroups, setUserGroups] = useState<GroupInfo[]>([]);
+  const [userScopes, setUserScopes] = useState<ScopeInfo[]>([]);
+  const [groupUsers, setGroupUsers] = useState<UserInfo[]>([]);
+  const [groupScopes, setGroupScopes] = useState<ScopeInfo[]>([]);
+  const [scopeUsers, setScopeUsers] = useState<UserInfo[]>([]);
+  const [scopeGroups, setScopeGroups] = useState<GroupInfo[]>([]);
+
+  // ========== 加载状态 ==========
   const [usersLoading, setUsersLoading] = useState(false);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [scopesLoading, setScopesLoading] = useState(false);
-  
-  // 分页
-  const [usersTotal, setUsersTotal] = useState(0);
-  const [groupsTotal, setGroupsTotal] = useState(0);
-  const [scopesTotal, setScopesTotal] = useState(0);
-  
-  // 搜索关键词
-  const [userKeyword, setUserKeyword] = useState('');
-  const [groupKeyword, setGroupKeyword] = useState('');
-  const [scopeKeyword, setScopeKeyword] = useState('');
-  
-  // 当前页码
+
+  // ========== 分页 ==========
   const [userPage, setUserPage] = useState(1);
   const [groupPage, setGroupPage] = useState(1);
   const [scopePage, setScopePage] = useState(1);
-  
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [groupsTotal, setGroupsTotal] = useState(0);
+  const [scopesTotal, setScopesTotal] = useState(0);
   const pageSize = 10;
-  
-  // 选中的数据
-  const [selectedUser, setSelectedUser] = useState<SelectedUser | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<SelectedGroup | null>(null);
-  
-  // 用户模态框
+
+  // ========== 搜索关键词 ==========
+  const [userKeyword, setUserKeyword] = useState('');
+  const [groupKeyword, setGroupKeyword] = useState('');
+  const [scopeKeyword, setScopeKeyword] = useState('');
+
+  // ========== 排序状态 ==========
+  const [userSort, setUserSort] = useState<SortState>({ field: 'id', order: 'ascend' });
+  const [groupSort, setGroupSort] = useState<SortState>({ field: 'id', order: 'ascend' });
+  const [scopeSort, setScopeSort] = useState<SortState>({ field: 'id', order: 'ascend' });
+
+  // ========== 当前筛选状态 ==========
+  const [filter, setFilter] = useState<FilterState>({
+    userId: null,
+    groupId: null,
+    scopeId: null,
+  });
+
+  // ========== 弹窗状态 ==========
+  // 用户编辑弹窗
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserInfo | null>(null);
   const [userForm] = Form.useForm();
-  
-  // 组模态框
+  const [userRelationModalOpen, setUserRelationModalOpen] = useState(false);
+  const [userTargetGroups, setUserTargetGroups] = useState<string[]>([]);
+
+  // 组编辑弹窗
   const [groupModalOpen, setGroupModalOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<GroupInfo | null>(null);
   const [groupForm] = Form.useForm();
-  
-  // 权限模态框
+  const [groupScopeRelationModalOpen, setGroupScopeRelationModalOpen] = useState(false);
+  const [groupTargetScopes, setGroupTargetScopes] = useState<string[]>([]);
+  const [groupUserRelationModalOpen, setGroupUserRelationModalOpen] = useState(false);
+  const [groupTargetUsers, setGroupTargetUsers] = useState<string[]>([]);
+
+  // 权限编辑弹窗
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
   const [editingScope, setEditingScope] = useState<ScopeInfo | null>(null);
   const [scopeForm] = Form.useForm();
-  
-  // 关联模态框
-  const [relationModalOpen, setRelationModalOpen] = useState(false);
-  const [relationType, setRelationType] = useState<'user-group' | 'group-scope'>('user-group');
-  
-  // 当前用户/组的组/权限列表（用于Transfer组件）
-  const [targetKeys, setTargetKeys] = useState<string[]>([]);
-  
-  // 加载全部用户
+  const [scopeGroupRelationModalOpen, setScopeGroupRelationModalOpen] = useState(false);
+  const [scopeTargetGroups, setScopeTargetGroups] = useState<string[]>([]);
+
+  // ========== 排序函数 ==========
+  const sortData = <T extends Record<string, any>>(
+    data: T[],
+    sort: SortState
+  ): T[] => {
+    if (!sort.order) return data;
+
+    return [...data].sort((a, b) => {
+      let aValue = a[sort.field];
+      let bValue = b[sort.field];
+
+      // 处理字符串比较
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = (bValue as string).toLowerCase();
+      }
+
+      if (aValue < bValue) return sort.order === 'ascend' ? -1 : 1;
+      if (aValue > bValue) return sort.order === 'ascend' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  // ========== 获取显示数据（考虑筛选、搜索和排序）==========
+  const displayUsers = useMemo(() => {
+    let result = users;
+    // 如果有组筛选，显示该组的用户
+    if (filter.groupId !== null) {
+      result = result.filter(u => groupUsers.some(gu => gu.id === u.id));
+    }
+    // 如果有权限筛选，显示该权限的用户
+    if (filter.scopeId !== null) {
+      result = result.filter(u => scopeUsers.some(su => su.id === u.id));
+    }
+    // 应用排序
+    return sortData(result, userSort);
+  }, [users, filter.groupId, filter.scopeId, groupUsers, scopeUsers, userSort]);
+
+  const displayGroups = useMemo(() => {
+    let result = groups;
+    // 如果有用户筛选，显示该用户的组
+    if (filter.userId !== null) {
+      result = result.filter(g => userGroups.some(ug => ug.id === g.id));
+    }
+    // 如果有权限筛选，显示该权限的组
+    if (filter.scopeId !== null) {
+      result = result.filter(g => scopeGroups.some(sg => sg.id === g.id));
+    }
+    // 应用排序
+    return sortData(result, groupSort);
+  }, [groups, filter.userId, filter.scopeId, userGroups, scopeGroups, groupSort]);
+
+  const displayScopes = useMemo(() => {
+    let result = scopes;
+    // 如果有用户筛选，显示该用户的权限
+    if (filter.userId !== null) {
+      result = result.filter(s => userScopes.some(us => us.id === s.id));
+    }
+    // 如果有组筛选，显示该组的权限
+    if (filter.groupId !== null) {
+      result = result.filter(s => groupScopes.some(gs => gs.id === s.id));
+    }
+    // 应用排序
+    return sortData(result, scopeSort);
+  }, [scopes, filter.userId, filter.groupId, userScopes, groupScopes, scopeSort]);
+
+  // ========== 加载全部数据 ==========
   const fetchUsers = useCallback(async () => {
     setUsersLoading(true);
     try {
@@ -113,8 +205,7 @@ export default function AdminPanel() {
       setUsersLoading(false);
     }
   }, [userPage, userKeyword]);
-  
-  // 加载全部组
+
   const fetchGroups = useCallback(async () => {
     setGroupsLoading(true);
     try {
@@ -124,7 +215,7 @@ export default function AdminPanel() {
         limit: pageSize,
         keyword: groupKeyword || undefined,
       });
-      setAllGroups(response.data.items);
+      setGroups(response.data.items);
       setGroupsTotal(response.data.total);
     } catch (error: any) {
       message.error('获取组列表失败');
@@ -132,8 +223,7 @@ export default function AdminPanel() {
       setGroupsLoading(false);
     }
   }, [groupPage, groupKeyword]);
-  
-  // 加载全部权限
+
   const fetchScopes = useCallback(async () => {
     setScopesLoading(true);
     try {
@@ -143,7 +233,7 @@ export default function AdminPanel() {
         limit: pageSize,
         keyword: scopeKeyword || undefined,
       });
-      setAllScopes(response.data.items);
+      setScopes(response.data.items);
       setScopesTotal(response.data.total);
     } catch (error: any) {
       message.error('获取权限列表失败');
@@ -151,92 +241,121 @@ export default function AdminPanel() {
       setScopesLoading(false);
     }
   }, [scopePage, scopeKeyword]);
-  
-  // 初始化加载
+
+  // ========== 加载关联数据 ==========
+  const fetchUserRelations = async (userId: number) => {
+    try {
+      const response = await adminUserApi.getUser(userId);
+      setUserGroups(response.data.groups);
+      setUserScopes(response.data.scopes);
+    } catch (error) {
+      message.error('获取用户关联数据失败');
+    }
+  };
+
+  const fetchGroupRelations = async (groupId: number) => {
+    try {
+      const response = await adminGroupApi.getGroup(groupId);
+      setGroupUsers(response.data.users);
+      setGroupScopes(response.data.scopes);
+    } catch (error) {
+      message.error('获取组关联数据失败');
+    }
+  };
+
+  const fetchScopeRelations = async (scopeId: number) => {
+    try {
+      const response = await adminScopeApi.getScope(scopeId);
+      setScopeUsers(response.data.users);
+      setScopeGroups(response.data.groups);
+    } catch (error) {
+      message.error('获取权限关联数据失败');
+    }
+  };
+
+  // ========== 初始化加载 ==========
   useEffect(() => {
     fetchUsers();
+  }, [fetchUsers]);
+
+  useEffect(() => {
     fetchGroups();
+  }, [fetchGroups]);
+
+  useEffect(() => {
     fetchScopes();
-  }, [fetchUsers, fetchGroups, fetchScopes]);
-  
-  // 点击用户：显示该用户的组和权限
+  }, [fetchScopes]);
+
+  // ========== 点击元素 ==========
   const handleUserClick = async (user: UserInfo) => {
-    try {
-      const response = await adminUserApi.getUser(user.id);
-      setSelectedUser({
-        ...user,
-        groups: response.data.groups,
-        scopes: response.data.scopes,
-      });
-      setSelectedGroup(null); // 清除选中的组
-    } catch (error: any) {
-      message.error('获取用户详情失败');
+    if (filter.userId === user.id) {
+      // 取消选中
+      setFilter(prev => ({ ...prev, userId: null }));
+      setUserGroups([]);
+      setUserScopes([]);
+    } else {
+      // 选中新用户
+      setFilter(prev => ({ ...prev, userId: user.id }));
+      await fetchUserRelations(user.id);
     }
   };
-  
-  // 点击组：显示该组的权限
+
   const handleGroupClick = async (group: GroupInfo) => {
-    try {
-      const response = await adminGroupApi.getGroup(group.id);
-      setSelectedGroup({
-        ...group,
-        scopes: response.data.scopes,
-      });
-    } catch (error: any) {
-      message.error('获取组详情失败');
+    if (filter.groupId === group.id) {
+      // 取消选中
+      setFilter(prev => ({ ...prev, groupId: null }));
+      setGroupUsers([]);
+      setGroupScopes([]);
+    } else {
+      // 选中新组
+      setFilter(prev => ({ ...prev, groupId: group.id }));
+      await fetchGroupRelations(group.id);
     }
   };
-  
-  // 清除用户选择
-  const clearUserSelection = () => {
-    setSelectedUser(null);
-    setSelectedGroup(null);
-  };
-  
-  // 清除组选择
-  const clearGroupSelection = () => {
-    setSelectedGroup(null);
-  };
-  
-  // 获取当前应显示的组列表
-  const getDisplayGroups = (): GroupInfo[] => {
-    if (selectedUser) {
-      return selectedUser.groups || [];
+
+  const handleScopeClick = async (scope: ScopeInfo) => {
+    if (filter.scopeId === scope.id) {
+      // 取消选中
+      setFilter(prev => ({ ...prev, scopeId: null }));
+      setScopeUsers([]);
+      setScopeGroups([]);
+    } else {
+      // 选中新权限
+      setFilter(prev => ({ ...prev, scopeId: scope.id }));
+      await fetchScopeRelations(scope.id);
     }
-    return allGroups;
   };
-  
-  // 获取当前应显示的权限列表
-  const getDisplayScopes = (): ScopeInfo[] => {
-    if (selectedGroup) {
-      return selectedGroup.scopes || [];
-    }
-    if (selectedUser) {
-      return selectedUser.scopes || [];
-    }
-    return allScopes;
+
+  // ========== 清除筛选 ==========
+  const clearAllFilters = () => {
+    setFilter({ userId: null, groupId: null, scopeId: null });
+    setUserGroups([]);
+    setUserScopes([]);
+    setGroupUsers([]);
+    setGroupScopes([]);
+    setScopeUsers([]);
+    setScopeGroups([]);
   };
-  
-  // 获取当前组列表的总页数
-  const getGroupsTotal = (): number => {
-    if (selectedUser) {
-      return selectedUser.groups?.length || 0;
+
+  // ========== 获取筛选状态标签 ==========
+  const getFilterTags = () => {
+    const tags = [];
+    if (filter.userId !== null) {
+      const user = users.find(u => u.id === filter.userId);
+      tags.push({ type: 'user', label: `用户: ${user?.username || filter.userId}`, clear: () => handleUserClick(user!) });
     }
-    return groupsTotal;
+    if (filter.groupId !== null) {
+      const group = groups.find(g => g.id === filter.groupId);
+      tags.push({ type: 'group', label: `组: ${group?.name || filter.groupId}`, clear: () => handleGroupClick(group!) });
+    }
+    if (filter.scopeId !== null) {
+      const scope = scopes.find(s => s.id === filter.scopeId);
+      tags.push({ type: 'scope', label: `权限: ${scope?.name || filter.scopeId}`, clear: () => handleScopeClick(scope!) });
+    }
+    return tags;
   };
-  
-  // 获取当前权限列表的总页数
-  const getScopesTotal = (): number => {
-    if (selectedGroup) {
-      return selectedGroup.scopes?.length || 0;
-    }
-    if (selectedUser) {
-      return selectedUser.scopes?.length || 0;
-    }
-    return scopesTotal;
-  };
-  
-  // 用户操作
+
+  // ========== 用户操作 ==========
   const handleCreateUser = async (values: any) => {
     try {
       await adminUserApi.createUser(values);
@@ -249,28 +368,26 @@ export default function AdminPanel() {
       message.error(msg);
     }
   };
-  
+
   const handleUpdateUser = async (values: any) => {
     if (!editingUser) return;
     try {
       await adminUserApi.updateUser({
         user_id: editingUser.id,
         ...values,
+        yn: values.yn ? 1 : 0,
       });
       message.success('更新成功');
       setUserModalOpen(false);
       setEditingUser(null);
       userForm.resetFields();
       fetchUsers();
-      if (selectedUser && selectedUser.id === editingUser.id) {
-        handleUserClick({ ...editingUser, ...values });
-      }
     } catch (error: any) {
       const msg = error.response?.data?.detail || '更新失败';
       message.error(msg);
     }
   };
-  
+
   const handleDeleteUser = async (userId: number) => {
     Modal.confirm({
       title: '确认删除',
@@ -280,8 +397,8 @@ export default function AdminPanel() {
           await adminUserApi.removeUser({ user_id: userId });
           message.success('删除成功');
           fetchUsers();
-          if (selectedUser?.id === userId) {
-            clearUserSelection();
+          if (filter.userId === userId) {
+            setFilter(prev => ({ ...prev, userId: null }));
           }
         } catch (error: any) {
           message.error('删除失败');
@@ -289,8 +406,8 @@ export default function AdminPanel() {
       },
     });
   };
-  
-  // 组操作
+
+  // ========== 组操作 ==========
   const handleCreateGroup = async (values: any) => {
     try {
       await adminGroupApi.createGroup(values);
@@ -303,28 +420,26 @@ export default function AdminPanel() {
       message.error(msg);
     }
   };
-  
+
   const handleUpdateGroup = async (values: any) => {
     if (!editingGroup) return;
     try {
       await adminGroupApi.updateGroup({
         group_id: editingGroup.id,
         ...values,
+        yn: values.yn ? 1 : 0,
       });
       message.success('更新成功');
       setGroupModalOpen(false);
       setEditingGroup(null);
       groupForm.resetFields();
       fetchGroups();
-      if (selectedGroup && selectedGroup.id === editingGroup.id) {
-        handleGroupClick({ ...editingGroup, ...values });
-      }
     } catch (error: any) {
       const msg = error.response?.data?.detail || '更新失败';
       message.error(msg);
     }
   };
-  
+
   const handleDeleteGroup = async (groupId: number) => {
     Modal.confirm({
       title: '确认删除',
@@ -334,8 +449,8 @@ export default function AdminPanel() {
           await adminGroupApi.removeGroup({ group_id: groupId });
           message.success('删除成功');
           fetchGroups();
-          if (selectedGroup?.id === groupId) {
-            clearGroupSelection();
+          if (filter.groupId === groupId) {
+            setFilter(prev => ({ ...prev, groupId: null }));
           }
         } catch (error: any) {
           message.error('删除失败');
@@ -343,8 +458,8 @@ export default function AdminPanel() {
       },
     });
   };
-  
-  // 权限操作
+
+  // ========== 权限操作 ==========
   const handleCreateScope = async (values: any) => {
     try {
       await adminScopeApi.createScope(values);
@@ -357,13 +472,14 @@ export default function AdminPanel() {
       message.error(msg);
     }
   };
-  
+
   const handleUpdateScope = async (values: any) => {
     if (!editingScope) return;
     try {
       await adminScopeApi.updateScope({
         scope_id: editingScope.id,
         ...values,
+        yn: values.yn ? 1 : 0,
       });
       message.success('更新成功');
       setScopeModalOpen(false);
@@ -375,7 +491,7 @@ export default function AdminPanel() {
       message.error(msg);
     }
   };
-  
+
   const handleDeleteScope = async (scopeId: number) => {
     Modal.confirm({
       title: '确认删除',
@@ -385,190 +501,460 @@ export default function AdminPanel() {
           await adminScopeApi.removeScope({ scope_id: scopeId });
           message.success('删除成功');
           fetchScopes();
+          if (filter.scopeId === scopeId) {
+            setFilter(prev => ({ ...prev, scopeId: null }));
+          }
         } catch (error: any) {
           message.error('删除失败');
         }
       },
     });
   };
-  
-  // 打开关联模态框
-  const openRelationModal = (type: 'user-group' | 'group-scope') => {
-    setRelationType(type);
-    if (type === 'user-group') {
-      // 获取用户已有的组
-      if (selectedUser) {
-        const keys = selectedUser.groups?.map(g => g.id.toString()) || [];
-        setTargetKeys(keys);
-      }
-    } else {
-      // 获取组已有的权限
-      if (selectedGroup) {
-        const keys = selectedGroup.scopes?.map(s => s.id.toString()) || [];
-        setTargetKeys(keys);
-      } else if (selectedUser) {
-        const keys = selectedUser.scopes?.map(s => s.id.toString()) || [];
-        setTargetKeys(keys);
-      }
-    }
-    setRelationModalOpen(true);
+
+  // ========== 关联管理 ==========
+  // 打开用户关联管理
+  const openUserRelationModal = (user: UserInfo) => {
+    setEditingUser(user);
+    // 获取用户当前已关联的组
+    adminUserApi.getUser(user.id).then(response => {
+      setUserTargetGroups(response.data.groups.map(g => g.id.toString()));
+      setUserRelationModalOpen(true);
+    });
   };
-  
-  // 处理关联转移
-  const handleRelationChange = async (newTargetKeys: React.Key[]) => {
+
+  // 打开组权限关联管理
+  const openGroupScopeRelationModal = (group: GroupInfo) => {
+    setEditingGroup(group);
+    // 获取组当前已关联的权限
+    adminGroupApi.getGroup(group.id).then(response => {
+      setGroupTargetScopes(response.data.scopes.map(s => s.id.toString()));
+      setGroupScopeRelationModalOpen(true);
+    });
+  };
+
+  // 打开组用户关联管理
+  const openGroupUserRelationModal = (group: GroupInfo) => {
+    setEditingGroup(group);
+    // 获取组当前已关联的用户
+    adminGroupApi.getGroup(group.id).then(response => {
+      setGroupTargetUsers(response.data.users.map(u => u.id.toString()));
+      setGroupUserRelationModalOpen(true);
+    });
+  };
+
+  // 打开权限组关联管理
+  const openScopeGroupRelationModal = (scope: ScopeInfo) => {
+    setEditingScope(scope);
+    // 获取权限当前已关联的组
+    adminScopeApi.getScope(scope.id).then(response => {
+      setScopeTargetGroups(response.data.groups.map(g => g.id.toString()));
+      setScopeGroupRelationModalOpen(true);
+    });
+  };
+
+  // 处理用户-组关联变更
+  const handleUserGroupChange = async (newTargetKeys: React.Key[]) => {
+    if (!editingUser) return;
+
     const keys = newTargetKeys.map(k => k.toString());
-    const oldKeys = targetKeys;
+    const oldKeys = userTargetGroups;
     const addKeys = keys.filter(k => !oldKeys.includes(k));
     const removeKeys = oldKeys.filter(k => !keys.includes(k));
-    
+
     try {
-      if (relationType === 'user-group') {
-        if (!selectedUser) return;
-        
-        // 添加关联
-        if (addKeys.length > 0) {
-          await adminRelationApi.addUserGroup({
-            relations: addKeys.map(gid => ({
-              user_id: selectedUser.id,
-              group_id: parseInt(gid),
-            })),
-          });
-        }
-        // 移除关联
-        if (removeKeys.length > 0) {
-          await adminRelationApi.removeUserGroup({
-            relations: removeKeys.map(gid => ({
-              user_id: selectedUser.id,
-              group_id: parseInt(gid),
-            })),
-          });
-        }
-        message.success('用户组更新成功');
-        // 刷新用户信息
-        handleUserClick(selectedUser);
-      } else {
-        if (!selectedGroup && !selectedUser) return;
-        
-        if (selectedGroup) {
-          // 添加关联
-          if (addKeys.length > 0) {
-            await adminRelationApi.addGroupScope({
-              relations: addKeys.map(sid => ({
-                group_id: selectedGroup.id,
-                scope_id: parseInt(sid),
-              })),
-            });
-          }
-          // 移除关联
-          if (removeKeys.length > 0) {
-            await adminRelationApi.removeGroupScope({
-              relations: removeKeys.map(sid => ({
-                group_id: selectedGroup.id,
-                scope_id: parseInt(sid),
-              })),
-            });
-          }
-          message.success('组权限更新成功');
-          handleGroupClick(selectedGroup);
-        } else if (selectedUser) {
-          // 用户直接关联权限（通过组间接获得）
-          message.info('请通过组来管理用户权限');
-        }
+      // 添加关联
+      if (addKeys.length > 0) {
+        await adminRelationApi.addUserGroup({
+          relations: addKeys.map(gid => ({
+            user_id: editingUser.id,
+            group_id: parseInt(gid),
+          })),
+        });
       }
-    } catch (error: any) {
+      // 移除关联
+      if (removeKeys.length > 0) {
+        await adminRelationApi.removeUserGroup({
+          relations: removeKeys.map(gid => ({
+            user_id: editingUser.id,
+            group_id: parseInt(gid),
+          })),
+        });
+      }
+      message.success('用户组关联更新成功');
+      setUserTargetGroups(keys);
+
+      // 如果当前筛选的是该用户，刷新关联数据
+      if (filter.userId === editingUser.id) {
+        await fetchUserRelations(editingUser.id);
+      }
+    } catch (error) {
       message.error('更新关联失败');
     }
-    setRelationModalOpen(false);
   };
-  
-  // 用户列表列
-  const userColumns = [
-    { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: '用户名', dataIndex: 'username' },
-    { title: '邮箱', dataIndex: 'email' },
-    { title: '状态', dataIndex: 'yn', render: (yn: number) => (
-      <Tag color={yn === 1 ? 'green' : 'red'}>{yn === 1 ? '正常' : '禁用'}</Tag>
-    )},
-    { title: '操作', key: 'action', render: (_: any, record: UserInfo) => (
-      <Space>
-        <Button type="link" size="small" onClick={() => {
-          setEditingUser(record);
-          userForm.setFieldsValue(record);
-          setUserModalOpen(true);
-        }}>编辑</Button>
-        <Button type="link" size="small" danger onClick={() => handleDeleteUser(record.id)}>删除</Button>
-      </Space>
-    )},
-  ];
-  
-  // 组列表列
-  const groupColumns = [
-    { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: '组名', dataIndex: 'name' },
-    { title: '状态', dataIndex: 'yn', render: (yn: number) => (
-      <Tag color={yn === 1 ? 'green' : 'red'}>{yn === 1 ? '正常' : '禁用'}</Tag>
-    )},
-    { title: '操作', key: 'action', render: (_: any, record: GroupInfo) => (
-      <Space>
-        <Button type="link" size="small" onClick={() => {
-          setEditingGroup(record);
-          groupForm.setFieldsValue(record);
-          setGroupModalOpen(true);
-        }}>编辑</Button>
-        <Button type="link" size="small" danger onClick={() => handleDeleteGroup(record.id)}>删除</Button>
-      </Space>
-    )},
-  ];
-  
-  // 权限列表列
-  const scopeColumns = [
-    { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: '权限名', dataIndex: 'name' },
-    { title: '描述', dataIndex: 'description', render: (desc: string | null) => desc || '-' },
-    { title: '状态', dataIndex: 'yn', render: (yn: number) => (
-      <Tag color={yn === 1 ? 'green' : 'red'}>{yn === 1 ? '正常' : '禁用'}</Tag>
-    )},
-    { title: '操作', key: 'action', render: (_: any, record: ScopeInfo) => (
-      <Space>
-        <Button type="link" size="small" onClick={() => {
-          setEditingScope(record);
-          scopeForm.setFieldsValue(record);
-          setScopeModalOpen(true);
-        }}>编辑</Button>
-        <Button type="link" size="small" danger onClick={() => handleDeleteScope(record.id)}>删除</Button>
-      </Space>
-    )},
-  ];
-  
-  // Transfer 数据源
-  const getTransferData = () => {
-    if (relationType === 'user-group') {
-      return allGroups.map(g => ({ key: g.id.toString(), title: g.name, description: g.name }));
-    } else {
-      return allScopes.map(s => ({ key: s.id.toString(), title: s.name, description: s.description || s.name }));
+
+  // 处理组-权限关联变更
+  const handleGroupScopeChange = async (newTargetKeys: React.Key[]) => {
+    if (!editingGroup) return;
+
+    const keys = newTargetKeys.map(k => k.toString());
+    const oldKeys = groupTargetScopes;
+    const addKeys = keys.filter(k => !oldKeys.includes(k));
+    const removeKeys = oldKeys.filter(k => !keys.includes(k));
+
+    try {
+      // 添加关联
+      if (addKeys.length > 0) {
+        await adminRelationApi.addGroupScope({
+          relations: addKeys.map(sid => ({
+            group_id: editingGroup.id,
+            scope_id: parseInt(sid),
+          })),
+        });
+      }
+      // 移除关联
+      if (removeKeys.length > 0) {
+        await adminRelationApi.removeGroupScope({
+          relations: removeKeys.map(sid => ({
+            group_id: editingGroup.id,
+            scope_id: parseInt(sid),
+          })),
+        });
+      }
+      message.success('组权限关联更新成功');
+      setGroupTargetScopes(keys);
+
+      // 如果当前筛选的是该组，刷新关联数据
+      if (filter.groupId === editingGroup.id) {
+        await fetchGroupRelations(editingGroup.id);
+      }
+    } catch (error) {
+      message.error('更新关联失败');
     }
   };
-  
+
+  // 处理组-用户关联变更
+  const handleGroupUserChange = async (newTargetKeys: React.Key[]) => {
+    if (!editingGroup) return;
+
+    const keys = newTargetKeys.map(k => k.toString());
+    const oldKeys = groupTargetUsers;
+    const addKeys = keys.filter(k => !oldKeys.includes(k));
+    const removeKeys = oldKeys.filter(k => !keys.includes(k));
+
+    try {
+      // 添加关联
+      if (addKeys.length > 0) {
+        await adminRelationApi.addUserGroup({
+          relations: addKeys.map(uid => ({
+            user_id: parseInt(uid),
+            group_id: editingGroup.id,
+          })),
+        });
+      }
+      // 移除关联
+      if (removeKeys.length > 0) {
+        await adminRelationApi.removeUserGroup({
+          relations: removeKeys.map(uid => ({
+            user_id: parseInt(uid),
+            group_id: editingGroup.id,
+          })),
+        });
+      }
+      message.success('组用户关联更新成功');
+      setGroupTargetUsers(keys);
+
+      // 如果当前筛选的是该组，刷新关联数据
+      if (filter.groupId === editingGroup.id) {
+        await fetchGroupRelations(editingGroup.id);
+      }
+    } catch (error) {
+      message.error('更新关联失败');
+    }
+  };
+
+  // 处理权限-组关联变更
+  const handleScopeGroupChange = async (newTargetKeys: React.Key[]) => {
+    if (!editingScope) return;
+
+    const keys = newTargetKeys.map(k => k.toString());
+    const oldKeys = scopeTargetGroups;
+    const addKeys = keys.filter(k => !oldKeys.includes(k));
+    const removeKeys = oldKeys.filter(k => !keys.includes(k));
+
+    try {
+      // 添加关联
+      if (addKeys.length > 0) {
+        await adminRelationApi.addGroupScope({
+          relations: addKeys.map(gid => ({
+            group_id: parseInt(gid),
+            scope_id: editingScope.id,
+          })),
+        });
+      }
+      // 移除关联
+      if (removeKeys.length > 0) {
+        await adminRelationApi.removeGroupScope({
+          relations: removeKeys.map(gid => ({
+            group_id: parseInt(gid),
+            scope_id: editingScope.id,
+          })),
+        });
+      }
+      message.success('权限组关联更新成功');
+      setScopeTargetGroups(keys);
+
+      // 如果当前筛选的是该权限，刷新关联数据
+      if (filter.scopeId === editingScope.id) {
+        await fetchScopeRelations(editingScope.id);
+      }
+    } catch (error) {
+      message.error('更新关联失败');
+    }
+  };
+
+  // ========== 表格列定义 ==========
+  const userColumns = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      width: 80,
+      sorter: true,
+      sortOrder: userSort.field === 'id' ? userSort.order : null,
+    },
+    {
+      title: '用户名',
+      dataIndex: 'username',
+      sorter: true,
+      sortOrder: userSort.field === 'username' ? userSort.order : null,
+      render: (text: string, record: UserInfo) => (
+        <span style={{ opacity: record.yn === 0 ? 0.5 : 1 }}>{text}</span>
+      ),
+    },
+    {
+      title: '邮箱',
+      dataIndex: 'email',
+      sorter: true,
+      sortOrder: userSort.field === 'email' ? userSort.order : null,
+      render: (text: string, record: UserInfo) => (
+        <span style={{ opacity: record.yn === 0 ? 0.5 : 1 }}>{text}</span>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 100,
+      render: (_: any, record: UserInfo) => (
+        <Space>
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingUser(record);
+                userForm.setFieldsValue({
+                  ...record,
+                  yn: record.yn === 1,
+                });
+                setUserModalOpen(true);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteUser(record.id);
+              }}
+            />
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
+
+  const groupColumns = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      width: 80,
+      sorter: true,
+      sortOrder: groupSort.field === 'id' ? groupSort.order : null,
+    },
+    {
+      title: '名称',
+      dataIndex: 'name',
+      sorter: true,
+      sortOrder: groupSort.field === 'name' ? groupSort.order : null,
+      render: (text: string, record: GroupInfo) => (
+        <span style={{ opacity: record.yn === 0 ? 0.5 : 1 }}>{text}</span>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 100,
+      render: (_: any, record: GroupInfo) => (
+        <Space>
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingGroup(record);
+                groupForm.setFieldsValue({
+                  ...record,
+                  yn: record.yn === 1,
+                });
+                setGroupModalOpen(true);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteGroup(record.id);
+              }}
+            />
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
+
+  const scopeColumns = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      width: 80,
+      sorter: true,
+      sortOrder: scopeSort.field === 'id' ? scopeSort.order : null,
+    },
+    {
+      title: '名称',
+      dataIndex: 'name',
+      sorter: true,
+      sortOrder: scopeSort.field === 'name' ? scopeSort.order : null,
+      render: (text: string, record: ScopeInfo) => (
+        <span style={{ opacity: record.yn === 0 ? 0.5 : 1 }}>{text}</span>
+      ),
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      render: (desc: string | null, record: ScopeInfo) => (
+        <span style={{ opacity: record.yn === 0 ? 0.5 : 1 }}>{desc || '-'}</span>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 100,
+      render: (_: any, record: ScopeInfo) => (
+        <Space>
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingScope(record);
+                scopeForm.setFieldsValue({
+                  ...record,
+                  yn: record.yn === 1,
+                });
+                setScopeModalOpen(true);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteScope(record.id);
+              }}
+            />
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
+
+  // 获取空状态提示文本
+  const getEmptyText = () => '空';
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Header style={{ background: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center' }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/profile')} style={{ marginRight: 16 }}>
           返回
         </Button>
-        <Title level={4} style={{ margin: 0 }}>管理面板</Title>
+        <Title level={4} style={{ margin: 0, flex: 1 }}>管理面板</Title>
       </Header>
+
+      {/* 筛选状态栏 */}
+      {(filter.userId !== null || filter.groupId !== null || filter.scopeId !== null) && (
+        <div style={{ background: '#f0f2f5', padding: '12px 24px', borderBottom: '1px solid #e8e8e8' }}>
+          <Space align="center">
+            <Text type="secondary">当前筛选:</Text>
+            {getFilterTags().map((tag, index) => (
+              <Tag
+                key={index}
+                color={tag.type === 'user' ? 'blue' : tag.type === 'group' ? 'green' : 'orange'}
+                closable
+                onClose={tag.clear}
+                style={{ fontSize: 13 }}
+              >
+                {tag.label}
+              </Tag>
+            ))}
+            <Button type="link" size="small" icon={<ClearOutlined />} onClick={clearAllFilters}>
+              清除全部
+            </Button>
+          </Space>
+        </div>
+      )}
+
       <Content style={{ padding: 16, display: 'flex', gap: 16 }}>
         {/* 用户栏 */}
-        <Card 
-          title={<span><UserOutlined /> 用户栏</span>}
-          style={{ flex: 1 }}
+        <Card
+          title={
+            <Space>
+              <UserOutlined />
+              <span>用户</span>
+              {filter.userId !== null && <Badge status="processing" />}
+            </Space>
+          }
+          style={{ flex: 1, minWidth: 0 }}
           extra={
-            <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => {
-              setEditingUser(null);
-              userForm.resetFields();
-              setUserModalOpen(true);
-            }}>
-              新增
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingUser(null);
+                userForm.resetFields();
+                setUserModalOpen(true);
+              }}
+            >
+              新建
             </Button>
           }
         >
@@ -580,175 +966,247 @@ export default function AdminPanel() {
               onChange={(e) => { setUserKeyword(e.target.value); setUserPage(1); }}
               onPressEnter={() => setUserPage(1)}
               suffix={<Button type="link" size="small" icon={<ReloadOutlined />} onClick={fetchUsers} />}
+              allowClear
             />
             <Table
               size="small"
               columns={userColumns}
-              dataSource={users}
+              dataSource={displayUsers}
               rowKey="id"
               loading={usersLoading}
-              rowSelection={{
-                type: 'radio',
-                selectedRowKeys: selectedUser ? [selectedUser.id] : [],
-                onChange: (_, selected) => {
-                  if (selected.length > 0) {
-                    handleUserClick(selected[0]);
-                  }
-                },
-              }}
               pagination={{
                 current: userPage,
                 pageSize,
-                total: usersTotal,
+                total: filter.userId === null ? usersTotal : displayUsers.length,
                 onChange: (p) => setUserPage(p),
                 showSizeChanger: false,
+                simple: true,
               }}
-              scroll={{ y: 400 }}
+              scroll={{ y: 350 }}
+              locale={{ emptyText: getEmptyText() }}
+              rowClassName={(record) => {
+                const isSelected = filter.userId === record.id;
+                const isDisabled = record.yn === 0;
+                return `${isSelected ? 'ant-table-row-selected' : ''} ${isDisabled ? 'row-disabled' : ''}`;
+              }}
+              onRow={(record) => ({
+                onClick: () => handleUserClick(record),
+                style: {
+                  cursor: 'pointer',
+                  backgroundColor: filter.userId === record.id ? '#e6f7ff' : undefined,
+                },
+              })}
+              onChange={(_, __, sorter: any) => {
+                // 处理 Ant Design 的多级排序格式
+                const sorterArray = Array.isArray(sorter) ? sorter : [sorter];
+                const activeSorter = sorterArray.find((s: any) => s && s.field) || sorterArray[0];
+
+                if (activeSorter && activeSorter.field) {
+                  // 获取当前字段的排序状态
+                  const currentOrder = userSort.field === activeSorter.field ? userSort.order : null;
+                  // 循环切换: 升序 -> 降序 -> 升序
+                  let newOrder: 'ascend' | 'descend';
+                  if (currentOrder === 'ascend') {
+                    newOrder = 'descend';
+                  } else {
+                    newOrder = 'ascend';
+                  }
+                  setUserSort({
+                    field: activeSorter.field,
+                    order: newOrder,
+                  });
+                }
+              }}
             />
           </Space>
         </Card>
-        
+
         {/* 组栏 */}
-        <Card 
-          title={<span><TeamOutlined /> 组栏</span>}
-          style={{ flex: 1 }}
-          extra={
+        <Card
+          title={
             <Space>
-              {selectedUser && (
-                <Button size="small" onClick={() => openRelationModal('user-group')}>
-                  分配组
-                </Button>
-              )}
-              <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => {
+              <TeamOutlined />
+              <span>组</span>
+              {filter.groupId !== null && <Badge status="processing" />}
+            </Space>
+          }
+          style={{ flex: 1, minWidth: 0 }}
+          extra={
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => {
                 setEditingGroup(null);
                 groupForm.resetFields();
                 setGroupModalOpen(true);
-              }}>
-                新增
-              </Button>
-            </Space>
+              }}
+            >
+              新建
+            </Button>
           }
         >
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            {selectedUser && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Tag color="blue">已选择用户: {selectedUser.username}</Tag>
-                <Button type="link" size="small" onClick={clearUserSelection}>清除</Button>
-              </div>
-            )}
-            {!selectedUser && (
-              <Input
-                placeholder="搜索组"
-                prefix={<SearchOutlined />}
-                value={groupKeyword}
-                onChange={(e) => { setGroupKeyword(e.target.value); setGroupPage(1); }}
-                onPressEnter={() => setGroupPage(1)}
-                suffix={<Button type="link" size="small" icon={<ReloadOutlined />} onClick={fetchGroups} />}
-              />
-            )}
-            {selectedUser && (
-              <div style={{ fontSize: 12, color: '#999' }}>
-                {selectedUser.groups?.length || 0} 个组
-              </div>
-            )}
+            <Input
+              placeholder="搜索组"
+              prefix={<SearchOutlined />}
+              value={groupKeyword}
+              onChange={(e) => { setGroupKeyword(e.target.value); setGroupPage(1); }}
+              onPressEnter={() => setGroupPage(1)}
+              suffix={<Button type="link" size="small" icon={<ReloadOutlined />} onClick={fetchGroups} />}
+              allowClear
+            />
             <Table
               size="small"
               columns={groupColumns}
-              dataSource={getDisplayGroups()}
+              dataSource={displayGroups}
               rowKey="id"
               loading={groupsLoading}
-              rowSelection={{
-                type: 'radio',
-                selectedRowKeys: selectedGroup ? [selectedGroup.id] : [],
-                onChange: (_, selected) => {
-                  if (selected.length > 0) {
-                    handleGroupClick(selected[0]);
-                  }
-                },
-              }}
               pagination={{
                 current: groupPage,
                 pageSize,
-                total: getGroupsTotal(),
+                total: filter.groupId === null ? groupsTotal : displayGroups.length,
                 onChange: (p) => setGroupPage(p),
                 showSizeChanger: false,
+                simple: true,
               }}
-              scroll={{ y: selectedUser ? 350 : 400 }}
-              locale={{ emptyText: selectedUser ? '该用户暂无组' : '暂无数据' }}
+              scroll={{ y: 350 }}
+              locale={{ emptyText: getEmptyText() }}
+              rowClassName={(record) => {
+                const isSelected = filter.groupId === record.id;
+                const isDisabled = record.yn === 0;
+                return `${isSelected ? 'ant-table-row-selected' : ''} ${isDisabled ? 'row-disabled' : ''}`;
+              }}
+              onRow={(record) => ({
+                onClick: () => handleGroupClick(record),
+                style: {
+                  cursor: 'pointer',
+                  backgroundColor: filter.groupId === record.id ? '#e6f7ff' : undefined,
+                },
+              })}
+              onChange={(_, __, sorter: any) => {
+                // 处理 Ant Design 的多级排序格式
+                const sorterArray = Array.isArray(sorter) ? sorter : [sorter];
+                const activeSorter = sorterArray.find((s: any) => s && s.field) || sorterArray[0];
+
+                if (activeSorter && activeSorter.field) {
+                  // 获取当前字段的排序状态
+                  const currentOrder = groupSort.field === activeSorter.field ? groupSort.order : null;
+                  // 循环切换: 升序 -> 降序 -> 升序
+                  let newOrder: 'ascend' | 'descend';
+                  if (currentOrder === 'ascend') {
+                    newOrder = 'descend';
+                  } else {
+                    newOrder = 'ascend';
+                  }
+                  setGroupSort({
+                    field: activeSorter.field,
+                    order: newOrder,
+                  });
+                }
+              }}
             />
           </Space>
         </Card>
-        
+
         {/* 权限栏 */}
-        <Card 
-          title={<span><SafetyOutlined /> 权限栏</span>}
-          style={{ flex: 1 }}
-          extra={
+        <Card
+          title={
             <Space>
-              {(selectedUser || selectedGroup) && (
-                <Button size="small" onClick={() => openRelationModal('group-scope')} disabled={!selectedGroup && !!selectedUser}>
-                  分配权限
-                </Button>
-              )}
-              <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => {
+              <SafetyOutlined />
+              <span>权限</span>
+              {filter.scopeId !== null && <Badge status="processing" />}
+            </Space>
+          }
+          style={{ flex: 1, minWidth: 0 }}
+          extra={
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => {
                 setEditingScope(null);
                 scopeForm.resetFields();
                 setScopeModalOpen(true);
-              }}>
-                新增
-              </Button>
-            </Space>
+              }}
+            >
+              新建
+            </Button>
           }
         >
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            {(selectedUser || selectedGroup) && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Tag color="blue">
-                  {selectedGroup ? `组: ${selectedGroup.name}` : `用户: ${selectedUser?.username}`}
-                </Tag>
-                <Button type="link" size="small" onClick={clearGroupSelection}>清除</Button>
-              </div>
-            )}
-            {!selectedUser && !selectedGroup && (
-              <Input
-                placeholder="搜索权限"
-                prefix={<SearchOutlined />}
-                value={scopeKeyword}
-                onChange={(e) => { setScopeKeyword(e.target.value); setScopePage(1); }}
-                onPressEnter={() => setScopePage(1)}
-                suffix={<Button type="link" size="small" icon={<ReloadOutlined />} onClick={fetchScopes} />}
-              />
-            )}
-            {(selectedUser || selectedGroup) && (
-              <div style={{ fontSize: 12, color: '#999' }}>
-                {getDisplayScopes().length} 个权限
-              </div>
-            )}
+            <Input
+              placeholder="搜索权限"
+              prefix={<SearchOutlined />}
+              value={scopeKeyword}
+              onChange={(e) => { setScopeKeyword(e.target.value); setScopePage(1); }}
+              onPressEnter={() => setScopePage(1)}
+              suffix={<Button type="link" size="small" icon={<ReloadOutlined />} onClick={fetchScopes} />}
+              allowClear
+            />
             <Table
               size="small"
               columns={scopeColumns}
-              dataSource={getDisplayScopes()}
+              dataSource={displayScopes}
               rowKey="id"
               loading={scopesLoading}
               pagination={{
                 current: scopePage,
                 pageSize,
-                total: getScopesTotal(),
+                total: filter.scopeId === null ? scopesTotal : displayScopes.length,
                 onChange: (p) => setScopePage(p),
                 showSizeChanger: false,
+                simple: true,
               }}
-              scroll={{ y: (selectedUser || selectedGroup) ? 350 : 400 }}
-              locale={{ emptyText: (selectedUser || selectedGroup) ? '暂无权限' : '暂无数据' }}
+              scroll={{ y: 350 }}
+              locale={{ emptyText: getEmptyText() }}
+              rowClassName={(record) => {
+                const isSelected = filter.scopeId === record.id;
+                const isDisabled = record.yn === 0;
+                return `${isSelected ? 'ant-table-row-selected' : ''} ${isDisabled ? 'row-disabled' : ''}`;
+              }}
+              onRow={(record) => ({
+                onClick: () => handleScopeClick(record),
+                style: {
+                  cursor: 'pointer',
+                  backgroundColor: filter.scopeId === record.id ? '#e6f7ff' : undefined,
+                },
+              })}
+              onChange={(_, __, sorter: any) => {
+                // 处理 Ant Design 的多级排序格式
+                const sorterArray = Array.isArray(sorter) ? sorter : [sorter];
+                const activeSorter = sorterArray.find((s: any) => s && s.field) || sorterArray[0];
+
+                if (activeSorter && activeSorter.field) {
+                  // 获取当前字段的排序状态
+                  const currentOrder = scopeSort.field === activeSorter.field ? scopeSort.order : null;
+                  // 循环切换: 升序 -> 降序 -> 升序
+                  let newOrder: 'ascend' | 'descend';
+                  if (currentOrder === 'ascend') {
+                    newOrder = 'descend';
+                  } else {
+                    newOrder = 'ascend';
+                  }
+                  setScopeSort({
+                    field: activeSorter.field,
+                    order: newOrder,
+                  });
+                }
+              }}
             />
           </Space>
         </Card>
       </Content>
-      
-      {/* 用户模态框 */}
+
+      {/* 用户编辑弹窗 */}
       <Modal
-        title={editingUser ? '编辑用户' : '新增用户'}
+        title={editingUser ? '编辑用户' : '新建用户'}
         open={userModalOpen}
-        onCancel={() => { setUserModalOpen(false); setEditingUser(null); userForm.resetFields(); }}
+        onCancel={() => {
+          setUserModalOpen(false);
+          setEditingUser(null);
+          userForm.resetFields();
+        }}
         onOk={() => userForm.submit()}
         destroyOnClose
       >
@@ -756,8 +1214,15 @@ export default function AdminPanel() {
           <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="email" label="邮箱" rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '请输入有效的邮箱' }]}>
-            <Input disabled={!!editingUser} />
+          <Form.Item
+            name="email"
+            label="邮箱"
+            rules={[
+              { required: true, message: '请输入邮箱' },
+              { type: 'email', message: '请输入有效的邮箱' }
+            ]}
+          >
+            <Input />
           </Form.Item>
           {!editingUser && (
             <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
@@ -765,72 +1230,249 @@ export default function AdminPanel() {
             </Form.Item>
           )}
           {editingUser && (
-            <Form.Item name="yn" label="状态" valuePropName="checked">
-              <Switch checkedChildren="正常" unCheckedChildren="禁用" />
-            </Form.Item>
+            <>
+              <Form.Item name="yn" label="状态" valuePropName="checked">
+                <Switch checkedChildren="正常" unCheckedChildren="禁用" />
+              </Form.Item>
+              <Divider />
+              <Form.Item>
+                <Button
+                  type="dashed"
+                  block
+                  icon={<LinkOutlined />}
+                  onClick={() => {
+                    setUserModalOpen(false);
+                    openUserRelationModal(editingUser);
+                  }}
+                >
+                  管理组关联
+                </Button>
+              </Form.Item>
+            </>
           )}
         </Form>
       </Modal>
-      
-      {/* 组模态框 */}
+
+      {/* 用户组关联管理弹窗 */}
       <Modal
-        title={editingGroup ? '编辑组' : '新增组'}
+        title={`管理用户组关联 - ${editingUser?.username}`}
+        open={userRelationModalOpen}
+        onCancel={() => {
+          setUserRelationModalOpen(false);
+          setEditingUser(null);
+          setUserTargetGroups([]);
+        }}
+        footer={null}
+        width={600}
+        destroyOnClose
+      >
+        <Transfer
+          dataSource={groups.map(g => ({ key: g.id.toString(), title: g.name }))}
+          titles={['可选组', '已关联']}
+          targetKeys={userTargetGroups}
+          onChange={handleUserGroupChange}
+          render={item => item.title}
+          listStyle={{ width: 250, height: 350 }}
+          showSearch
+          filterOption={(inputValue, item) =>
+            (item?.title as string)?.toLowerCase().includes(inputValue.toLowerCase())
+          }
+        />
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <Button onClick={() => setUserRelationModalOpen(false)}>关闭</Button>
+        </div>
+      </Modal>
+
+      {/* 组编辑弹窗 */}
+      <Modal
+        title={editingGroup ? '编辑组' : '新建组'}
         open={groupModalOpen}
-        onCancel={() => { setGroupModalOpen(false); setEditingGroup(null); groupForm.resetFields(); }}
+        onCancel={() => {
+          setGroupModalOpen(false);
+          setEditingGroup(null);
+          groupForm.resetFields();
+        }}
         onOk={() => groupForm.submit()}
         destroyOnClose
       >
         <Form form={groupForm} layout="vertical" onFinish={editingGroup ? handleUpdateGroup : handleCreateGroup}>
           <Form.Item name="name" label="组名" rules={[{ required: true, message: '请输入组名' }]}>
-            <Input disabled={!!editingGroup} />
+            <Input />
           </Form.Item>
           {editingGroup && (
-            <Form.Item name="yn" label="状态" valuePropName="checked">
-              <Switch checkedChildren="正常" unCheckedChildren="禁用" />
-            </Form.Item>
+            <>
+              <Form.Item name="yn" label="状态" valuePropName="checked">
+                <Switch checkedChildren="正常" unCheckedChildren="禁用" />
+              </Form.Item>
+              <Divider />
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Button
+                  type="dashed"
+                  block
+                  icon={<LinkOutlined />}
+                  onClick={() => {
+                    setGroupModalOpen(false);
+                    openGroupUserRelationModal(editingGroup);
+                  }}
+                >
+                  管理用户关联
+                </Button>
+                <Button
+                  type="dashed"
+                  block
+                  icon={<LinkOutlined />}
+                  onClick={() => {
+                    setGroupModalOpen(false);
+                    openGroupScopeRelationModal(editingGroup);
+                  }}
+                >
+                  管理权限关联
+                </Button>
+              </Space>
+            </>
           )}
         </Form>
       </Modal>
-      
-      {/* 权限模态框 */}
+
+      {/* 组用户关联管理弹窗 */}
       <Modal
-        title={editingScope ? '编辑权限' : '新增权限'}
+        title={`管理组用户关联 - ${editingGroup?.name}`}
+        open={groupUserRelationModalOpen}
+        onCancel={() => {
+          setGroupUserRelationModalOpen(false);
+          setEditingGroup(null);
+          setGroupTargetUsers([]);
+        }}
+        footer={null}
+        width={600}
+        destroyOnClose
+      >
+        <Transfer
+          dataSource={users.map(u => ({ key: u.id.toString(), title: u.username, description: u.email }))}
+          titles={['可选用户', '已关联']}
+          targetKeys={groupTargetUsers}
+          onChange={handleGroupUserChange}
+          render={item => (
+            <Tooltip title={item.description}>
+              <span>{item.title}</span>
+            </Tooltip>
+          )}
+          listStyle={{ width: 250, height: 350 }}
+          showSearch
+          filterOption={(inputValue, item) =>
+            (item?.title as string)?.toLowerCase().includes(inputValue.toLowerCase()) ||
+            (item?.description as string)?.toLowerCase().includes(inputValue.toLowerCase())
+          }
+        />
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <Button onClick={() => setGroupUserRelationModalOpen(false)}>关闭</Button>
+        </div>
+      </Modal>
+
+      {/* 组权限关联管理弹窗 */}
+      <Modal
+        title={`管理组权限关联 - ${editingGroup?.name}`}
+        open={groupScopeRelationModalOpen}
+        onCancel={() => {
+          setGroupScopeRelationModalOpen(false);
+          setEditingGroup(null);
+          setGroupTargetScopes([]);
+        }}
+        footer={null}
+        width={600}
+        destroyOnClose
+      >
+        <Transfer
+          dataSource={scopes.map(s => ({ key: s.id.toString(), title: s.name, description: s.description || '' }))}
+          titles={['可选权限', '已关联']}
+          targetKeys={groupTargetScopes}
+          onChange={handleGroupScopeChange}
+          render={item => (
+            <Tooltip title={item.description}>
+              <span>{item.title}</span>
+            </Tooltip>
+          )}
+          listStyle={{ width: 250, height: 350 }}
+          showSearch
+          filterOption={(inputValue, item) =>
+            (item?.title as string)?.toLowerCase().includes(inputValue.toLowerCase()) ||
+            (item?.description as string)?.toLowerCase().includes(inputValue.toLowerCase())
+          }
+        />
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <Button onClick={() => setGroupScopeRelationModalOpen(false)}>关闭</Button>
+        </div>
+      </Modal>
+
+      {/* 权限编辑弹窗 */}
+      <Modal
+        title={editingScope ? '编辑权限' : '新建权限'}
         open={scopeModalOpen}
-        onCancel={() => { setScopeModalOpen(false); setEditingScope(null); scopeForm.resetFields(); }}
+        onCancel={() => {
+          setScopeModalOpen(false);
+          setEditingScope(null);
+          scopeForm.resetFields();
+        }}
         onOk={() => scopeForm.submit()}
         destroyOnClose
       >
         <Form form={scopeForm} layout="vertical" onFinish={editingScope ? handleUpdateScope : handleCreateScope}>
           <Form.Item name="name" label="权限名" rules={[{ required: true, message: '请输入权限名' }]}>
-            <Input disabled={!!editingScope} />
+            <Input />
           </Form.Item>
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={3} />
           </Form.Item>
           {editingScope && (
-            <Form.Item name="yn" label="状态" valuePropName="checked">
-              <Switch checkedChildren="正常" unCheckedChildren="禁用" />
-            </Form.Item>
+            <>
+              <Form.Item name="yn" label="状态" valuePropName="checked">
+                <Switch checkedChildren="正常" unCheckedChildren="禁用" />
+              </Form.Item>
+              <Divider />
+              <Button
+                type="dashed"
+                block
+                icon={<LinkOutlined />}
+                onClick={() => {
+                  setScopeModalOpen(false);
+                  openScopeGroupRelationModal(editingScope);
+                }}
+              >
+                管理组关联
+              </Button>
+            </>
           )}
         </Form>
       </Modal>
-      
-      {/* 关联模态框 */}
+
+      {/* 权限组关联管理弹窗 */}
       <Modal
-        title={relationType === 'user-group' ? '分配用户组' : '分配组权限'}
-        open={relationModalOpen}
-        onCancel={() => setRelationModalOpen(false)}
+        title={`管理权限组关联 - ${editingScope?.name}`}
+        open={scopeGroupRelationModalOpen}
+        onCancel={() => {
+          setScopeGroupRelationModalOpen(false);
+          setEditingScope(null);
+          setScopeTargetGroups([]);
+        }}
         footer={null}
-        width={500}
+        width={600}
+        destroyOnClose
       >
         <Transfer
-          dataSource={getTransferData()}
-          titles={['可选', '已选']}
-          targetKeys={targetKeys}
-          onChange={handleRelationChange}
+          dataSource={groups.map(g => ({ key: g.id.toString(), title: g.name }))}
+          titles={['可选组', '已关联']}
+          targetKeys={scopeTargetGroups}
+          onChange={handleScopeGroupChange}
           render={item => item.title}
-          listStyle={{ width: 200, height: 300 }}
+          listStyle={{ width: 250, height: 350 }}
+          showSearch
+          filterOption={(inputValue, item) =>
+            (item?.title as string)?.toLowerCase().includes(inputValue.toLowerCase())
+          }
         />
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <Button onClick={() => setScopeGroupRelationModalOpen(false)}>关闭</Button>
+        </div>
       </Modal>
     </Layout>
   );

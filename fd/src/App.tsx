@@ -1,18 +1,13 @@
 import { RouterProvider } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { Toaster } from 'sonner';
 import { router } from './router';
 
 function App() {
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          colorPrimary: '#1890ff',
-        },
-      }}
-    >
+    <>
       <RouterProvider router={router} />
-    </ConfigProvider>
+      <Toaster position="top-center" richColors />
+    </>
   );
 }
 

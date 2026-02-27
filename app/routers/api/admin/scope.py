@@ -60,8 +60,10 @@ async def api_update_scope(
         db_session, scope, name=body.name, description=body.description, yn=body.yn
     )
 
-    # 如果禁用或启用权限，更新所有涉及用户的访问令牌权限
-    if body.yn is not None and body.yn != original_yn:
+    # 如果禁用/启用权限，或修改权限名，更新所有涉及用户的访问令牌权限
+    if (body.yn is not None and body.yn != original_yn) or (
+        body.name is not None and body.name != scope.name
+    ):
         # 获取权限关联的组及组内用户
         scope_with_groups = await scope_repo.get_by_id_with_group_user(
             db_session, body.scope_id
