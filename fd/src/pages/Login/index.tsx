@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { handleApiError } from "@/lib/error";
-import { validateEmailWithError } from "@/lib/validation";
+import {
+	validateEmailWithError,
+	validatePasswordWithError,
+} from "@/lib/validation";
 import { userApi } from "../../api/user";
 import { useAuthStore } from "../../stores/authStore";
 import type { LoginRequest } from "../../types";
@@ -17,6 +20,7 @@ export default function Login() {
 	const login = useAuthStore((state) => state.login);
 	const [loading, setLoading] = useState(false);
 	const [emailError, setEmailError] = useState("");
+	const [passwordError, setPasswordError] = useState("");
 	const [formData, setFormData] = useState<LoginRequest>({
 		email: "",
 		password: "",
@@ -30,8 +34,32 @@ export default function Login() {
 		setEmailError(email ? result.error : "");
 	};
 
+	// 处理密码输入变化
+	const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const password = e.target.value;
+		setFormData({ ...formData, password });
+		const result = validatePasswordWithError(password);
+		setPasswordError(password ? result.error : "");
+	};
+
 	const handleSubmit: React.SubmitEventHandler<HTMLFormElement> = async (e) => {
 		e.preventDefault();
+
+		// 前置校验
+		const emailResult = validateEmailWithError(formData.email);
+		if (!emailResult.valid) {
+			setEmailError(emailResult.error);
+			toast.error(emailResult.error);
+			return;
+		}
+
+		const passwordResult = validatePasswordWithError(formData.password);
+		if (!passwordResult.valid) {
+			setPasswordError(passwordResult.error);
+			toast.error(passwordResult.error);
+			return;
+		}
+
 		setLoading(true);
 		try {
 			await userApi.login(formData);
@@ -92,14 +120,19 @@ export default function Login() {
 										id="password"
 										type="password"
 										placeholder="请输入密码"
-										className="pl-10 bg-[#f0ece6] border-stone-300/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl"
+										className={`pl-10 bg-[#f0ece6] shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl ${
+											passwordError
+												? "border-red-400 focus-visible:ring-red-400"
+												: "border-stone-300/60"
+										}`}
 										value={formData.password}
-										onChange={(e) =>
-											setFormData({ ...formData, password: e.target.value })
-										}
+										onChange={handlePasswordChange}
 										required
 									/>
 								</div>
+								{passwordError && (
+									<p className="text-sm text-red-500">{passwordError}</p>
+								)}
 							</div>
 
 							<Button

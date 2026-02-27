@@ -170,6 +170,8 @@ async def api_update_email(
     # 检查用户是否被禁用
     if not user.yn:
         raise user_error.UserDisabledError  # 用户被禁用
+    # 校验邮箱验证码
+    await email_code_service.verify_email_code(body.email, "reset_email", body.code)
     # 检查邮箱是否和原邮箱相同
     if user.email == body.email:
         raise user_error.UserEmailSameError  # 邮箱与原邮箱相同

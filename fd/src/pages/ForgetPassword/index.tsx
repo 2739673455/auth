@@ -1,5 +1,5 @@
-import { Loader2, Lock, Mail, Shield } from "lucide-react";
-import { useState } from "react";
+import { KeyRound, Loader2, Lock, Mail } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,9 @@ export default function ForgetPassword() {
 	const [loading, setLoading] = useState(false);
 	const [sendingCode, setSendingCode] = useState(false);
 	const [countdown, setCountdown] = useState(0);
+	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 	const [emailError, setEmailError] = useState("");
+	const [codeError, setCodeError] = useState("");
 	const [passwordError, setPasswordError] = useState("");
 	const [confirmPasswordError, setConfirmPasswordError] = useState("");
 	const [formData, setFormData] = useState({
@@ -38,6 +40,15 @@ export default function ForgetPassword() {
 		password: "",
 	});
 	const [confirmPassword, setConfirmPassword] = useState("");
+
+	// 倒计时清理
+	useEffect(() => {
+		return () => {
+			if (timerRef.current) {
+				clearInterval(timerRef.current);
+			}
+		};
+	}, []);
 
 	// 处理邮箱输入变化
 	const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,6 +64,11 @@ export default function ForgetPassword() {
 		setFormData({ ...formData, password });
 		const result = validatePasswordWithError(password);
 		setPasswordError(password ? result.error : "");
+		// 联动校验确认密码
+		if (confirmPassword) {
+			const confirmResult = validateConfirmPassword(password, confirmPassword);
+			setConfirmPasswordError(confirmResult.error);
+		}
 	};
 
 	// 处理确认密码输入变化
@@ -63,6 +79,18 @@ export default function ForgetPassword() {
 		setConfirmPassword(value);
 		const result = validateConfirmPassword(formData.password, value);
 		setConfirmPasswordError(value && formData.password ? result.error : "");
+	};
+
+	// 处理验证码输入变化
+	const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const code = e.target.value;
+		setFormData({ ...formData, code });
+		if (!code) {
+			setCodeError("");
+			return;
+		}
+		const result = validateCodeWithError(code);
+		setCodeError(result.error);
 	};
 
 	const sendCode = async () => {
@@ -78,12 +106,13 @@ export default function ForgetPassword() {
 				type: "reset_password",
 			};
 			await userApi.sendEmailCode(data);
-			toast.success("验证码已发送到您的邮箱");
+			toast.success("验证码已发送");
 			setCountdown(60);
-			const timer = setInterval(() => {
+			if (timerRef.current) clearInterval(timerRef.current);
+			timerRef.current = setInterval(() => {
 				setCountdown((prev) => {
 					if (prev <= 1) {
-						clearInterval(timer);
+						if (timerRef.current) clearInterval(timerRef.current);
 						return 0;
 					}
 					return prev - 1;
@@ -197,15 +226,17 @@ export default function ForgetPassword() {
 								</Label>
 								<div className="flex gap-2">
 									<div className="relative flex-1">
-										<Shield className="absolute left-3 top-3 h-4 w-4 text-stone-400" />
+										<KeyRound className="absolute left-3 top-3 h-4 w-4 text-stone-400" />
 										<Input
 											id="code"
 											placeholder="请输入验证码"
-											className="pl-10 bg-[#f0ece6] border-stone-300/60 shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl"
+											className={`pl-10 bg-[#f0ece6] shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] rounded-xl ${
+												codeError
+													? "border-red-400 focus-visible:ring-red-400"
+													: "border-stone-300/60"
+											}`}
 											value={formData.code}
-											onChange={(e) =>
-												setFormData({ ...formData, code: e.target.value })
-											}
+											onChange={handleCodeChange}
 											maxLength={6}
 											required
 										/>
@@ -226,6 +257,9 @@ export default function ForgetPassword() {
 										)}
 									</Button>
 								</div>
+								{codeError && (
+									<p className="text-sm text-red-500">{codeError}</p>
+								)}
 							</div>
 
 							<div className="space-y-2">
