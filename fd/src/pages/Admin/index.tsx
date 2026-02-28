@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import {
 	AlertCircle,
 	ArrowDownAz,
@@ -6,7 +7,6 @@ import {
 	Check,
 	Edit,
 	Loader2,
-	LogOut,
 	Plus,
 	Shield,
 	Trash2,
@@ -73,7 +73,7 @@ interface FilterState {
 
 export default function AdminPanel() {
 	const navigate = useNavigate();
-	const { logout, hasScope } = useAuthStore();
+	const { logout } = useAuthStore();
 
 	// 数据
 	const [users, setUsers] = useState<UserInfo[]>([]);
@@ -89,7 +89,6 @@ export default function AdminPanel() {
 
 	// 加载状态
 	const [loading, setLoading] = useState(true);
-	const [detailLoading, setDetailLoading] = useState(false);
 
 	// 排序状态
 	const [userSort, setUserSort] = useState<SortState>({
@@ -111,6 +110,11 @@ export default function AdminPanel() {
 		groupId: null,
 		scopeId: null,
 	});
+
+	// 搜索状态
+	const [userSearch, setUserSearch] = useState("");
+	const [groupSearch, setGroupSearch] = useState("");
+	const [scopeSearch, setScopeSearch] = useState("");
 
 	// 弹窗状态
 	const [createUserOpen, setCreateUserOpen] = useState(false);
@@ -160,6 +164,9 @@ export default function AdminPanel() {
 	const [editScopeLoading, setEditScopeLoading] = useState(false);
 	const [editScopeGroups, setEditScopeGroups] = useState<number[]>([]);
 
+	// 编辑组弹窗标签页状态
+	const [editGroupTab, setEditGroupTab] = useState<"users" | "scopes">("users");
+
 	// 获取基础数据
 	const fetchBaseData = useCallback(async () => {
 		setLoading(true);
@@ -172,8 +179,8 @@ export default function AdminPanel() {
 			setUsers(usersRes.data.items);
 			setGroups(groupsRes.data.items);
 			setScopes(scopesRes.data.items);
-		} catch (error: any) {
-			if (error.response?.status === 401) {
+		} catch (error: unknown) {
+			if (error instanceof AxiosError && error.response?.status === 401) {
 				await logout();
 				navigate("/login");
 			} else {
@@ -186,7 +193,6 @@ export default function AdminPanel() {
 
 	// 获取详情数据
 	const fetchDetail = useCallback(async () => {
-		setDetailLoading(true);
 		try {
 			const promises: Promise<void>[] = [];
 			if (filter.userId) {
@@ -217,10 +223,8 @@ export default function AdminPanel() {
 				setScopeDetail(null);
 			}
 			await Promise.all(promises);
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "获取详情失败");
-		} finally {
-			setDetailLoading(false);
 		}
 	}, [filter]);
 
@@ -237,6 +241,15 @@ export default function AdminPanel() {
 	// 筛选后的数据
 	const filteredUsers = useMemo(() => {
 		let result = users;
+		// 搜索过滤
+		if (userSearch) {
+			const search = userSearch.toLowerCase();
+			result = result.filter(
+				(u) =>
+					u.username.toLowerCase().includes(search) ||
+					u.email.toLowerCase().includes(search),
+			);
+		}
 		if (filter.groupId && groupDetail) {
 			result = result.filter((u) =>
 				groupDetail.users.some((gu) => gu.id === u.id),
@@ -248,10 +261,22 @@ export default function AdminPanel() {
 			);
 		}
 		return result;
-	}, [users, filter.groupId, filter.scopeId, groupDetail, scopeDetail]);
+	}, [
+		users,
+		userSearch,
+		filter.groupId,
+		filter.scopeId,
+		groupDetail,
+		scopeDetail,
+	]);
 
 	const filteredGroups = useMemo(() => {
 		let result = groups;
+		// 搜索过滤
+		if (groupSearch) {
+			const search = groupSearch.toLowerCase();
+			result = result.filter((g) => g.name.toLowerCase().includes(search));
+		}
 		if (filter.userId && userDetail) {
 			result = result.filter((g) =>
 				userDetail.groups.some((ug) => ug.id === g.id),
@@ -263,10 +288,26 @@ export default function AdminPanel() {
 			);
 		}
 		return result;
-	}, [groups, filter.userId, filter.scopeId, userDetail, scopeDetail]);
+	}, [
+		groups,
+		groupSearch,
+		filter.userId,
+		filter.scopeId,
+		userDetail,
+		scopeDetail,
+	]);
 
 	const filteredScopes = useMemo(() => {
 		let result = scopes;
+		// 搜索过滤
+		if (scopeSearch) {
+			const search = scopeSearch.toLowerCase();
+			result = result.filter(
+				(s) =>
+					s.name.toLowerCase().includes(search) ||
+					s.description?.toLowerCase().includes(search),
+			);
+		}
 		if (filter.userId && userDetail) {
 			result = result.filter((s) =>
 				userDetail.scopes.some((us) => us.id === s.id),
@@ -278,7 +319,14 @@ export default function AdminPanel() {
 			);
 		}
 		return result;
-	}, [scopes, filter.userId, filter.groupId, userDetail, groupDetail]);
+	}, [
+		scopes,
+		scopeSearch,
+		filter.userId,
+		filter.groupId,
+		userDetail,
+		groupDetail,
+	]);
 
 	// 排序后的数据
 	const sortedUsers = useMemo(() => {
@@ -387,7 +435,9 @@ export default function AdminPanel() {
 	};
 
 	// 创建用户
-	const handleCreateUser = async (e: React.FormEvent) => {
+	const handleCreateUser: React.SubmitEventHandler<HTMLFormElement> = async (
+		e,
+	) => {
 		e.preventDefault();
 		const emailResult = validateEmailWithError(newUserEmail);
 		if (!emailResult.valid) {
@@ -418,7 +468,7 @@ export default function AdminPanel() {
 			setNewUserUsername("");
 			setNewUserPassword("");
 			fetchBaseData();
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "创建失败");
 		} finally {
 			setCreateUserLoading(false);
@@ -442,7 +492,9 @@ export default function AdminPanel() {
 	};
 
 	// 编辑用户
-	const handleEditUser = async (e: React.FormEvent) => {
+	const handleEditUser: React.SubmitEventHandler<HTMLFormElement> = async (
+		e,
+	) => {
 		e.preventDefault();
 		if (!editUserId) return;
 		setEditUserLoading(true);
@@ -484,7 +536,7 @@ export default function AdminPanel() {
 			if (filter.userId === editUserId) {
 				fetchDetail();
 			}
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "更新失败");
 		} finally {
 			setEditUserLoading(false);
@@ -501,13 +553,15 @@ export default function AdminPanel() {
 				setFilter((f) => ({ ...f, userId: null }));
 			}
 			fetchBaseData();
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "删除失败");
 		}
 	};
 
 	// 创建组
-	const handleCreateGroup = async (e: React.FormEvent) => {
+	const handleCreateGroup: React.SubmitEventHandler<HTMLFormElement> = async (
+		e,
+	) => {
 		e.preventDefault();
 		if (!newGroupName.trim()) {
 			toast.error("组名不能为空");
@@ -521,7 +575,7 @@ export default function AdminPanel() {
 			setCreateGroupOpen(false);
 			setNewGroupName("");
 			fetchBaseData();
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "创建失败");
 		} finally {
 			setCreateGroupLoading(false);
@@ -545,7 +599,9 @@ export default function AdminPanel() {
 	};
 
 	// 编辑组
-	const handleEditGroup = async (e: React.FormEvent) => {
+	const handleEditGroup: React.SubmitEventHandler<HTMLFormElement> = async (
+		e,
+	) => {
 		e.preventDefault();
 		if (!editGroupId) return;
 		setEditGroupLoading(true);
@@ -612,7 +668,7 @@ export default function AdminPanel() {
 			if (filter.groupId === editGroupId) {
 				fetchDetail();
 			}
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "更新失败");
 		} finally {
 			setEditGroupLoading(false);
@@ -629,13 +685,15 @@ export default function AdminPanel() {
 				setFilter((f) => ({ ...f, groupId: null }));
 			}
 			fetchBaseData();
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "删除失败");
 		}
 	};
 
 	// 创建权限
-	const handleCreateScope = async (e: React.FormEvent) => {
+	const handleCreateScope: React.SubmitEventHandler<HTMLFormElement> = async (
+		e,
+	) => {
 		e.preventDefault();
 		if (!newScopeName.trim()) {
 			toast.error("权限名不能为空");
@@ -653,7 +711,7 @@ export default function AdminPanel() {
 			setNewScopeName("");
 			setNewScopeDesc("");
 			fetchBaseData();
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "创建失败");
 		} finally {
 			setCreateScopeLoading(false);
@@ -676,7 +734,9 @@ export default function AdminPanel() {
 	};
 
 	// 编辑权限
-	const handleEditScope = async (e: React.FormEvent) => {
+	const handleEditScope: React.SubmitEventHandler<HTMLFormElement> = async (
+		e,
+	) => {
 		e.preventDefault();
 		if (!editScopeId) return;
 		setEditScopeLoading(true);
@@ -717,7 +777,7 @@ export default function AdminPanel() {
 			if (filter.scopeId === editScopeId) {
 				fetchDetail();
 			}
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "更新失败");
 		} finally {
 			setEditScopeLoading(false);
@@ -734,15 +794,9 @@ export default function AdminPanel() {
 				setFilter((f) => ({ ...f, scopeId: null }));
 			}
 			fetchBaseData();
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "删除失败");
 		}
-	};
-
-	const handleLogout = async () => {
-		await logout();
-		toast.success("已登出");
-		navigate("/login");
 	};
 
 	// 渲染排序按钮
@@ -776,7 +830,6 @@ export default function AdminPanel() {
 
 	// 渲染列表项
 	const renderListItem = (
-		id: number,
 		displayContent: React.ReactNode,
 		isSelected: boolean,
 		isDisabled: boolean,
@@ -882,41 +935,6 @@ export default function AdminPanel() {
 
 	return (
 		<div className="min-h-screen flex bg-[#e8e4df]">
-			{/* 侧边栏 */}
-			<aside className="w-64 border-r border-stone-300/60 bg-[#f0ece6] flex flex-col">
-				<div className="p-4 text-center font-semibold text-lg text-stone-700">
-					管理面板
-				</div>
-				<nav className="flex-1 space-y-1 p-2">
-					<button
-						type="button"
-						onClick={() => navigate("/profile")}
-						className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-stone-600 hover:bg-stone-200/50"
-					>
-						<User className="h-4 w-4" />
-						个人信息
-					</button>
-					{hasScope("*") ? (
-						<button
-							type="button"
-							className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm bg-stone-600 text-white"
-						>
-							<Shield className="h-4 w-4" />
-							管理后台
-						</button>
-					) : null}
-				</nav>
-				<div className="p-2">
-					<Button
-						onClick={handleLogout}
-						className="w-full bg-red-500 text-white hover:bg-red-600 rounded-xl"
-					>
-						<LogOut className="mr-2 h-4 w-4" />
-						登出
-					</Button>
-				</div>
-			</aside>
-
 			{/* 主内容 */}
 			<main className="flex-1 p-6 overflow-hidden">
 				<div className="grid grid-cols-3 gap-6 h-full">
@@ -940,6 +958,23 @@ export default function AdminPanel() {
 								>
 									<Plus className="h-4 w-4" />
 								</Button>
+							</div>
+							<div className="mb-3 relative">
+								<Input
+									placeholder="搜索用户名或邮箱"
+									value={userSearch}
+									onChange={(e) => setUserSearch(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl text-sm h-8 pr-8"
+								/>
+								{userSearch && (
+									<button
+										type="button"
+										onClick={() => setUserSearch("")}
+										className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+									>
+										<X className="h-4 w-4" />
+									</button>
+								)}
 							</div>
 							<div className="flex gap-1">
 								{renderSortButton(
@@ -971,7 +1006,6 @@ export default function AdminPanel() {
 							) : (
 								sortedUsers.map((user) =>
 									renderListItem(
-										user.id,
 										<div className="flex-1 min-w-0">
 											<div className="flex items-center gap-2">
 												<span className="text-xs opacity-60">#{user.id}</span>
@@ -1015,6 +1049,23 @@ export default function AdminPanel() {
 									<Plus className="h-4 w-4" />
 								</Button>
 							</div>
+							<div className="mb-3 relative">
+								<Input
+									placeholder="搜索组名"
+									value={groupSearch}
+									onChange={(e) => setGroupSearch(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl text-sm h-8 pr-8"
+								/>
+								{groupSearch && (
+									<button
+										type="button"
+										onClick={() => setGroupSearch("")}
+										className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+									>
+										<X className="h-4 w-4" />
+									</button>
+								)}
+							</div>
 							<div className="flex gap-1">
 								{renderSortButton(
 									"id",
@@ -1039,7 +1090,6 @@ export default function AdminPanel() {
 							) : (
 								sortedGroups.map((group) =>
 									renderListItem(
-										group.id,
 										<div className="flex items-center gap-2">
 											<span className="text-xs opacity-60">#{group.id}</span>
 											<span className="font-medium">{group.name}</span>
@@ -1076,6 +1126,23 @@ export default function AdminPanel() {
 									<Plus className="h-4 w-4" />
 								</Button>
 							</div>
+							<div className="mb-3 relative">
+								<Input
+									placeholder="搜索权限名或描述"
+									value={scopeSearch}
+									onChange={(e) => setScopeSearch(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl text-sm h-8 pr-8"
+								/>
+								{scopeSearch && (
+									<button
+										type="button"
+										onClick={() => setScopeSearch("")}
+										className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+									>
+										<X className="h-4 w-4" />
+									</button>
+								)}
+							</div>
 							<div className="flex gap-1">
 								{renderSortButton(
 									"id",
@@ -1100,7 +1167,6 @@ export default function AdminPanel() {
 							) : (
 								sortedScopes.map((scope) =>
 									renderListItem(
-										scope.id,
 										<div className="flex-1 min-w-0">
 											<div className="flex items-center gap-2">
 												<span className="text-xs opacity-60">#{scope.id}</span>
@@ -1350,18 +1416,44 @@ export default function AdminPanel() {
 								onCheckedChange={(checked) => setEditGroupYn(checked ? 1 : 0)}
 							/>
 						</div>
-						{renderRelationSelector(
-							"成员用户",
-							users.map((u) => ({ id: u.id, name: u.username })),
-							editGroupUsers,
-							setEditGroupUsers,
-						)}
-						{renderRelationSelector(
-							"包含权限",
-							scopes.map((s) => ({ id: s.id, name: s.name })),
-							editGroupScopes,
-							setEditGroupScopes,
-						)}
+						{/* 标签页切换 */}
+						<div className="flex border-b border-stone-300/60">
+							<button
+								type="button"
+								onClick={() => setEditGroupTab("users")}
+								className={`px-3 py-2 text-sm rounded-t-xl ${
+									editGroupTab === "users"
+										? "bg-stone-600 text-white"
+										: "text-stone-600 hover:bg-stone-200/50"
+								}`}
+							>
+								成员用户
+							</button>
+							<button
+								type="button"
+								onClick={() => setEditGroupTab("scopes")}
+								className={`px-3 py-2 text-sm rounded-t-xl ${
+									editGroupTab === "scopes"
+										? "bg-stone-600 text-white"
+										: "text-stone-600 hover:bg-stone-200/50"
+								}`}
+							>
+								包含权限
+							</button>
+						</div>
+						{editGroupTab === "users"
+							? renderRelationSelector(
+									"成员用户",
+									users.map((u) => ({ id: u.id, name: u.username })),
+									editGroupUsers,
+									setEditGroupUsers,
+								)
+							: renderRelationSelector(
+									"包含权限",
+									scopes.map((s) => ({ id: s.id, name: s.name })),
+									editGroupScopes,
+									setEditGroupScopes,
+								)}
 						<DialogFooter>
 							<Button
 								type="button"

@@ -186,36 +186,47 @@ async def remove(db_session: AsyncSession, user_id: int) -> None:
 
 
 async def ls(
-    db_session: AsyncSession, offset: int, limit: int, keyword: str | None = None
-) -> tuple[list[User], int]:
+    db_session: AsyncSession,
+    offset: int,
+    limit: int,
+    keyword: str | None = None,
+    all: bool = False,
+) -> list[User] | tuple[list[User], int]:
     """获取用户列表（支持分页和搜索）
 
     Args:
         db_session: 数据库会话
-        offset: 分页偏移量，从 0 开始
+        offset: 分页偏移量
         limit: 每页返回数量
         keyword: 搜索关键字，会匹配用户名和邮箱，为 None 则不搜索
+        all: 是否查询全部数据，为 True 时忽略分页参数
 
     Returns:
-        元组 (用户列表, 总数)
+        分页时返回 (用户列表, 总数)，不分页时返回用户列表
     """
     # 构建基础查询
     base_stmt = select(User)
-    count_stmt = select(func.count()).select_from(User)
 
     # 添加搜索条件
     if keyword:
         filter_cond = (User.name.contains(keyword)) | (User.email.contains(keyword))
         base_stmt = base_stmt.where(filter_cond)
-        count_stmt = count_stmt.where(filter_cond)
 
     # 执行查询
-    stmt = base_stmt.offset(offset).limit(limit).order_by(User.id.desc())
-    result = await db_session.execute(stmt)
-    users = result.scalars().all()
+    if keyword or all:
+        # 搜索时或查询全部数据时，不进行分页
+        stmt = base_stmt.order_by(User.id.desc())
+        result = await db_session.execute(stmt)
+        users = result.scalars().all()
+        return list(users)
+    else:
+        # 分页时需要查询总数
+        count_stmt = select(func.count()).select_from(User)
+        count_result = await db_session.execute(count_stmt)
+        total = count_result.scalar() or 0
 
-    # 获取总数
-    total_result = await db_session.execute(count_stmt)
-    total = total_result.scalar() or 0
+        stmt = base_stmt.offset(offset).limit(limit).order_by(User.id.desc())
+        result = await db_session.execute(stmt)
+        users = result.scalars().all()
 
-    return list(users), total
+        return list(users), total

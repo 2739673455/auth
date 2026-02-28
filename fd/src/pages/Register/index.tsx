@@ -122,7 +122,7 @@ export default function Register() {
 					return prev - 1;
 				});
 			}, 1000);
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "发送失败");
 		} finally {
 			setSendingCode(false);
@@ -183,7 +183,7 @@ export default function Register() {
 			login(userResponse.data, scope);
 			toast.success("注册成功");
 			navigate("/profile");
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "注册失败");
 		} finally {
 			setLoading(false);

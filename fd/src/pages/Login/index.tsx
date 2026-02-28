@@ -69,7 +69,7 @@ export default function Login() {
 			login(userResponse.data, scope);
 			toast.success("登录成功");
 			navigate("/profile");
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "登录失败");
 		} finally {
 			setLoading(false);

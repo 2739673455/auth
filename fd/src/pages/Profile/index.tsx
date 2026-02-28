@@ -4,8 +4,8 @@ import {
 	Lock,
 	LogOut,
 	Mail,
+	PanelsTopLeft,
 	Pencil,
-	Shield,
 	User,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -125,7 +125,9 @@ export default function Profile() {
 		setUsernameError(value ? result.error : "");
 	};
 
-	const updateUsername = async (e: React.FormEvent) => {
+	const updateUsername: React.SubmitEventHandler<HTMLFormElement> = async (
+		e,
+	) => {
 		e.preventDefault();
 
 		// 前置校验
@@ -143,7 +145,7 @@ export default function Profile() {
 			const response = await userApi.getMe();
 			setUser(response.data);
 			closeAllEdits();
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "修改失败");
 		} finally {
 			setUsernameLoading(false);
@@ -195,14 +197,14 @@ export default function Profile() {
 					return prev - 1;
 				});
 			}, 1000);
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "发送失败");
 		} finally {
 			setSendingEmailCode(false);
 		}
 	};
 
-	const updateEmail = async (e: React.FormEvent) => {
+	const updateEmail: React.SubmitEventHandler<HTMLFormElement> = async (e) => {
 		e.preventDefault();
 
 		// 前置校验
@@ -221,7 +223,7 @@ export default function Profile() {
 			const response = await userApi.getMe();
 			setUser(response.data);
 			closeAllEdits();
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "修改失败");
 		} finally {
 			setEmailLoading(false);
@@ -289,14 +291,16 @@ export default function Profile() {
 					return prev - 1;
 				});
 			}, 1000);
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "发送失败");
 		} finally {
 			setSendingPasswordCode(false);
 		}
 	};
 
-	const updatePassword = async (e: React.FormEvent) => {
+	const updatePassword: React.SubmitEventHandler<HTMLFormElement> = async (
+		e,
+	) => {
 		e.preventDefault();
 
 		if (!user?.email) {
@@ -339,7 +343,7 @@ export default function Profile() {
 				await logout();
 				navigate("/login");
 			}, 2000);
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "修改失败");
 		} finally {
 			setPasswordLoading(false);
@@ -641,7 +645,7 @@ export default function Profile() {
 							onClick={() => navigate("/admin")}
 							className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-stone-600 hover:bg-stone-200/50"
 						>
-							<Shield className="h-4 w-4" />
+							<PanelsTopLeft className="h-4 w-4" />
 							管理后台
 						</button>
 					) : null}

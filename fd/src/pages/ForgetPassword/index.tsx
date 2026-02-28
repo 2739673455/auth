@@ -118,7 +118,7 @@ export default function ForgetPassword() {
 					return prev - 1;
 				});
 			}, 1000);
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "发送失败");
 		} finally {
 			setSendingCode(false);
@@ -176,7 +176,7 @@ export default function ForgetPassword() {
 			const userResponse = await userApi.getMe();
 			login(userResponse.data, scope);
 			navigate("/profile");
-		} catch (error: any) {
+		} catch (error: unknown) {
 			handleApiError(error, "重置密码失败");
 		} finally {
 			setLoading(false);
