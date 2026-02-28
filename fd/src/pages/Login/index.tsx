@@ -1,6 +1,6 @@
 import { Loader2, Lock, Mail } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,14 @@ import type { LoginRequest } from "../../types";
 
 export default function Login() {
 	const navigate = useNavigate();
+	const location = useLocation();
+
+	// 优先级：1. URL参数 redirect_uri  2. location.state.from  3. 默认 /profile
+	const searchParams = new URLSearchParams(location.search);
+	const redirectUri = searchParams.get("redirect_uri");
+	const from =
+		redirectUri || (location.state as { from?: string })?.from || "/profile";
+
 	const login = useAuthStore((state) => state.login);
 	const [loading, setLoading] = useState(false);
 	const [emailError, setEmailError] = useState("");
@@ -68,7 +76,13 @@ export default function Login() {
 			const userResponse = await userApi.getMe();
 			login(userResponse.data, scope);
 			toast.success("登录成功");
-			navigate("/profile");
+
+			// 如果是外部URL，使用 window.location 跳转
+			if (from.startsWith("http://") || from.startsWith("https://")) {
+				window.location.replace(from);
+			} else {
+				navigate(from, { replace: true });
+			}
 		} catch (error: unknown) {
 			handleApiError(error, "登录失败");
 		} finally {

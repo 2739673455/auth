@@ -522,6 +522,59 @@ export default function AdminPanel() {
 		setEditUserOpen(true);
 	};
 
+	// 打开编辑用户-组关联关系弹窗
+	const openEditUserRelation = async (user: UserInfo) => {
+		setEditUserId(user.id);
+		setEditUserUsernameVal(user.username);
+		try {
+			const res = await adminUserApi.getUser(user.id);
+			const groupIds = res.data.groups.map((g) => g.id);
+			setEditUserGroups(groupIds);
+			setOriginalUserGroups(groupIds);
+		} catch {
+			setEditUserGroups([]);
+			setOriginalUserGroups([]);
+		}
+		setEditUserRelationOpen(true);
+	};
+
+	// 提交用户-组关联关系修改
+	const handleSubmitUserRelation = async () => {
+		if (!editUserId) return;
+		try {
+			const currentGroups = editUserGroups;
+			const originalGroups = originalUserGroups;
+			const toAdd = currentGroups.filter((id) => !originalGroups.includes(id));
+			const toRemove = originalGroups.filter(
+				(id) => !currentGroups.includes(id),
+			);
+			if (toAdd.length > 0) {
+				await adminRelationApi.addUserGroup({
+					relations: toAdd.map((groupId) => ({
+						user_id: editUserId,
+						group_id: groupId,
+					})),
+				});
+			}
+			if (toRemove.length > 0) {
+				await adminRelationApi.removeUserGroup({
+					relations: toRemove.map((groupId) => ({
+						user_id: editUserId,
+						group_id: groupId,
+					})),
+				});
+			}
+			toast.success("关联关系更新成功");
+			setEditUserRelationOpen(false);
+			refreshData();
+			if (filter.userId === editUserId) {
+				fetchDetail();
+			}
+		} catch (error: unknown) {
+			handleApiError(error, "更新关联关系失败");
+		}
+	};
+
 	// 编辑用户
 	const handleEditUser: React.SubmitEventHandler<HTMLFormElement> = async (
 		e,
@@ -633,6 +686,101 @@ export default function AdminPanel() {
 			setOriginalGroupScopes([]);
 		}
 		setEditGroupOpen(true);
+	};
+
+	// 打开编辑组关联关系弹窗
+	const openEditGroupRelation = async (
+		group: GroupInfo,
+		tab: "users" | "scopes",
+	) => {
+		setEditGroupId(group.id);
+		setEditGroupNameVal(group.name);
+		try {
+			const res = await adminGroupApi.getGroup(group.id);
+			const userIds = res.data.users.map((u) => u.id);
+			const scopeIds = res.data.scopes.map((s) => s.id);
+			setEditGroupUsers(userIds);
+			setOriginalGroupUsers(userIds);
+			setEditGroupScopes(scopeIds);
+			setOriginalGroupScopes(scopeIds);
+		} catch {
+			setEditGroupUsers([]);
+			setOriginalGroupUsers([]);
+			setEditGroupScopes([]);
+			setOriginalGroupScopes([]);
+		}
+		setEditGroupRelationTab(tab);
+		setEditGroupRelationOpen(true);
+	};
+
+	// 提交组-用户关联关系修改
+	const handleSubmitGroupUserRelation = async () => {
+		if (!editGroupId) return;
+		try {
+			const currentUsers = editGroupUsers;
+			const originalUsers = originalGroupUsers;
+			const toAdd = currentUsers.filter((id) => !originalUsers.includes(id));
+			const toRemove = originalUsers.filter((id) => !currentUsers.includes(id));
+			if (toAdd.length > 0) {
+				await adminRelationApi.addUserGroup({
+					relations: toAdd.map((userId) => ({
+						user_id: userId,
+						group_id: editGroupId,
+					})),
+				});
+			}
+			if (toRemove.length > 0) {
+				await adminRelationApi.removeUserGroup({
+					relations: toRemove.map((userId) => ({
+						user_id: userId,
+						group_id: editGroupId,
+					})),
+				});
+			}
+			toast.success("用户关联更新成功");
+			setEditGroupRelationOpen(false);
+			refreshData();
+			if (filter.groupId === editGroupId) {
+				fetchDetail();
+			}
+		} catch (error: unknown) {
+			handleApiError(error, "更新用户关联失败");
+		}
+	};
+
+	// 提交组-权限关联关系修改
+	const handleSubmitGroupScopeRelation = async () => {
+		if (!editGroupId) return;
+		try {
+			const currentScopes = editGroupScopes;
+			const originalScopes = originalGroupScopes;
+			const toAdd = currentScopes.filter((id) => !originalScopes.includes(id));
+			const toRemove = originalScopes.filter((id) => !currentScopes.includes(id));
+			if (toAdd.length > 0) {
+				await adminRelationApi.addGroupScope({
+					relations: toAdd.map((scopeId) => ({
+						group_id: editGroupId,
+						scope_id: scopeId,
+					})),
+				});
+			}
+			if (toRemove.length > 0) {
+				await adminRelationApi.removeGroupScope({
+					relations: toRemove.map((scopeId) => ({
+						group_id: editGroupId,
+						scope_id: scopeId,
+					})),
+				});
+			}
+			toast.success("权限关联更新成功");
+			setEditGroupRelationOpen(false);
+			refreshData();
+			if (filter.groupId === editGroupId) {
+				fetchDetail();
+			}
+		} catch (error: unknown) {
+			handleApiError(error, "更新权限关联失败");
+		}
 	};
 
 	// 编辑组
@@ -773,6 +921,57 @@ export default function AdminPanel() {
 		setEditScopeOpen(true);
 	};
 
+	// 打开编辑权限-组关联关系弹窗
+	const openEditScopeRelation = async (scope: ScopeInfo) => {
+		setEditScopeId(scope.id);
+		setEditScopeNameVal(scope.name);
+		try {
+			const res = await adminScopeApi.getScope(scope.id);
+			const groupIds = res.data.groups.map((g) => g.id);
+			setEditScopeGroups(groupIds);
+			setOriginalScopeGroups(groupIds);
+		} catch {
+			setEditScopeGroups([]);
+			setOriginalScopeGroups([]);
+		}
+		setEditScopeRelationOpen(true);
+	};
+
+	// 提交权限-组关联关系修改
+	const handleSubmitScopeRelation = async () => {
+		if (!editScopeId) return;
+		try {
+			const currentGroups = editScopeGroups;
+			const originalGroups = originalScopeGroups;
+			const toAdd = currentGroups.filter((id) => !originalGroups.includes(id));
+			const toRemove = originalGroups.filter((id) => !currentGroups.includes(id));
+			if (toAdd.length > 0) {
+				await adminRelationApi.addGroupScope({
+					relations: toAdd.map((groupId) => ({
+						group_id: groupId,
+						scope_id: editScopeId,
+					})),
+				});
+			}
+			if (toRemove.length > 0) {
+				await adminRelationApi.removeGroupScope({
+					relations: toRemove.map((groupId) => ({
+						group_id: groupId,
+						scope_id: editScopeId,
+					})),
+				});
+			}
+			toast.success("关联关系更新成功");
+			setEditScopeRelationOpen(false);
+			refreshData();
+			if (filter.scopeId === editScopeId) {
+				fetchDetail();
+			}
+		} catch (error: unknown) {
+			handleApiError(error, "更新关联关系失败");
+		}
+	};
+
 	// 编辑权限
 	const handleEditScope: React.SubmitEventHandler<HTMLFormElement> = async (
 		e,
@@ -876,6 +1075,7 @@ export default function AdminPanel() {
 		onEdit: () => void,
 		onDelete: () => void,
 		onClick: () => void,
+		extraButtons?: React.ReactNode,
 	) => (
 		<button
 			type="button"
@@ -890,6 +1090,7 @@ export default function AdminPanel() {
 		>
 			{displayContent}
 			<div className="flex items-center gap-1">
+				{extraButtons}
 				<Button
 					type="button"
 					variant="ghost"
@@ -903,6 +1104,7 @@ export default function AdminPanel() {
 						e.stopPropagation();
 						onEdit();
 					}}
+					title="编辑信息"
 				>
 					<Edit className="h-4 w-4" />
 				</Button>
@@ -919,6 +1121,7 @@ export default function AdminPanel() {
 						e.stopPropagation();
 						onDelete();
 					}}
+					title="删除"
 				>
 					<Trash2 className="h-4 w-4" />
 				</Button>
@@ -1024,6 +1227,23 @@ export default function AdminPanel() {
 									() => openEditUser(user),
 									() => handleDeleteUser(user.id),
 									() => handleUserClick(user),
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										className={`h-7 w-7 ${
+											filter.userId === user.id
+												? "text-white hover:bg-white/20"
+												: "hover:bg-stone-300/50 text-stone-500"
+										}`}
+										onClick={(e) => {
+											e.stopPropagation();
+											openEditUserRelation(user);
+										}}
+										title="编辑与组的关联关系"
+									>
+										<Users className="h-4 w-4" />
+									</Button>,
 								),
 							)
 						)}
@@ -1104,6 +1324,42 @@ export default function AdminPanel() {
 									() => openEditGroup(group),
 									() => handleDeleteGroup(group.id),
 									() => handleGroupClick(group),
+									<>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											className={`h-7 w-7 ${
+												filter.groupId === group.id
+													? "text-white hover:bg-white/20"
+													: "hover:bg-stone-300/50 text-stone-500"
+											}`}
+											onClick={(e) => {
+												e.stopPropagation();
+												openEditGroupRelation(group, "users");
+											}}
+											title="编辑与用户的关联关系"
+										>
+											<User className="h-4 w-4" />
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											className={`h-7 w-7 ${
+												filter.groupId === group.id
+													? "text-white hover:bg-white/20"
+													: "hover:bg-stone-300/50 text-stone-500"
+											}`}
+											onClick={(e) => {
+												e.stopPropagation();
+												openEditGroupRelation(group, "scopes");
+											}}
+											title="编辑与权限的关联关系"
+										>
+											<Shield className="h-4 w-4" />
+										</Button>
+									</>,
 								),
 							)
 						)}
@@ -1191,6 +1447,23 @@ export default function AdminPanel() {
 									() => openEditScope(scope),
 									() => handleDeleteScope(scope.id),
 									() => handleScopeClick(scope),
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										className={`h-7 w-7 ${
+											filter.scopeId === scope.id
+												? "text-white hover:bg-white/20"
+												: "hover:bg-stone-300/50 text-stone-500"
+										}`}
+										onClick={(e) => {
+											e.stopPropagation();
+											openEditScopeRelation(scope);
+										}}
+										title="编辑与组的关联关系"
+									>
+										<Users className="h-4 w-4" />
+									</Button>,
 								),
 							)
 						)}
@@ -1343,28 +1616,6 @@ export default function AdminPanel() {
 									onCheckedChange={(checked) => setEditUserYn(checked ? 1 : 0)}
 								/>
 							</div>
-							<div className="pt-2 border-t border-stone-300/60">
-								<Button
-									type="button"
-									variant="outline"
-									onClick={() => setEditUserRelationOpen(true)}
-									className="w-full bg-white border-stone-300/60 rounded-xl relative"
-								>
-									编辑用户-组关联
-									{(() => {
-										const current = [...editUserGroups].sort((a, b) => a - b);
-										const original = [...originalUserGroups].sort(
-											(a, b) => a - b,
-										);
-										const hasChanges =
-											current.length !== original.length ||
-											current.some((id, i) => id !== original[i]);
-										return hasChanges ? (
-											<span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-										) : null;
-									})()}
-								</Button>
-							</div>
 							<DialogFooter>
 								<Button
 									type="button"
@@ -1450,54 +1701,6 @@ export default function AdminPanel() {
 									checked={editGroupYn === 1}
 									onCheckedChange={(checked) => setEditGroupYn(checked ? 1 : 0)}
 								/>
-							</div>
-							<div className="pt-2 border-t border-stone-300/60 space-y-2">
-								<Button
-									type="button"
-									variant="outline"
-									onClick={() => {
-										setEditGroupRelationTab("users");
-										setEditGroupRelationOpen(true);
-									}}
-									className="w-full bg-white border-stone-300/60 rounded-xl relative"
-								>
-									编辑组-用户关联
-									{(() => {
-										const current = [...editGroupUsers].sort((a, b) => a - b);
-										const original = [...originalGroupUsers].sort(
-											(a, b) => a - b,
-										);
-										const hasChanges =
-											current.length !== original.length ||
-											current.some((id, i) => id !== original[i]);
-										return hasChanges ? (
-											<span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-										) : null;
-									})()}
-								</Button>
-								<Button
-									type="button"
-									variant="outline"
-									onClick={() => {
-										setEditGroupRelationTab("scopes");
-										setEditGroupRelationOpen(true);
-									}}
-									className="w-full bg-white border-stone-300/60 rounded-xl relative"
-								>
-									编辑组-权限关联
-									{(() => {
-										const current = [...editGroupScopes].sort((a, b) => a - b);
-										const original = [...originalGroupScopes].sort(
-											(a, b) => a - b,
-										);
-										const hasChanges =
-											current.length !== original.length ||
-											current.some((id, i) => id !== original[i]);
-										return hasChanges ? (
-											<span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-										) : null;
-									})()}
-								</Button>
 							</div>
 							<DialogFooter>
 								<Button
@@ -1601,28 +1804,6 @@ export default function AdminPanel() {
 									onCheckedChange={(checked) => setEditScopeYn(checked ? 1 : 0)}
 								/>
 							</div>
-							<div className="pt-2 border-t border-stone-300/60">
-								<Button
-									type="button"
-									variant="outline"
-									onClick={() => setEditScopeRelationOpen(true)}
-									className="w-full bg-white border-stone-300/60 rounded-xl relative"
-								>
-									编辑权限-组关联
-									{(() => {
-										const current = [...editScopeGroups].sort((a, b) => a - b);
-										const original = [...originalScopeGroups].sort(
-											(a, b) => a - b,
-										);
-										const hasChanges =
-											current.length !== original.length ||
-											current.some((id, i) => id !== original[i]);
-										return hasChanges ? (
-											<span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-										) : null;
-									})()}
-								</Button>
-							</div>
 							<DialogFooter>
 								<Button
 									type="button"
@@ -1679,7 +1860,7 @@ export default function AdminPanel() {
 							</Button>
 							<Button
 								type="button"
-								onClick={() => setEditUserRelationOpen(false)}
+								onClick={handleSubmitUserRelation}
 								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
 							>
 								确定
@@ -1735,7 +1916,13 @@ export default function AdminPanel() {
 							</Button>
 							<Button
 								type="button"
-								onClick={() => setEditGroupRelationOpen(false)}
+								onClick={() => {
+									if (editGroupRelationTab === "users") {
+										handleSubmitGroupUserRelation();
+									} else {
+										handleSubmitGroupScopeRelation();
+									}
+								}}
 								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
 							>
 								确定
@@ -1776,7 +1963,7 @@ export default function AdminPanel() {
 							</Button>
 							<Button
 								type="button"
-								onClick={() => setEditScopeRelationOpen(false)}
+								onClick={handleSubmitScopeRelation}
 								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
 							>
 								确定

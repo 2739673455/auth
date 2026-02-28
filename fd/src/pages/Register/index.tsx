@@ -1,6 +1,6 @@
 import { KeyRound, Loader2, Lock, Mail, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,14 @@ import type { RegisterRequest, SendCodeRequest } from "../../types";
 
 export default function Register() {
 	const navigate = useNavigate();
+	const location = useLocation();
+
+	// 优先级：1. URL参数 redirect_uri  2. location.state.from  3. 默认 /profile
+	const searchParams = new URLSearchParams(location.search);
+	const redirectUri = searchParams.get("redirect_uri");
+	const from =
+		redirectUri || (location.state as { from?: string })?.from || "/profile";
+
 	const login = useAuthStore((state) => state.login);
 	const [loading, setLoading] = useState(false);
 	const [sendingCode, setSendingCode] = useState(false);
@@ -182,7 +190,13 @@ export default function Register() {
 			const userResponse = await userApi.getMe();
 			login(userResponse.data, scope);
 			toast.success("注册成功");
-			navigate("/profile");
+
+			// 如果是外部URL，使用 window.location 跳转
+			if (from.startsWith("http://") || from.startsWith("https://")) {
+				window.location.replace(from);
+			} else {
+				navigate(from, { replace: true });
+			}
 		} catch (error: unknown) {
 			handleApiError(error, "注册失败");
 		} finally {
