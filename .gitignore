@@ -1,7 +1,6 @@
 __pycache__/
 *.py[oc]
 build/
-dist/
 wheels/
 *.egg-info
 
@@ -9,4 +8,5 @@ wheels/
 logs
 .pytest_cache
 *.db
+fd/dist
 docker/volumes

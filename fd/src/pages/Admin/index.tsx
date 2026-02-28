@@ -4,7 +4,6 @@ import {
 	ArrowDownAz,
 	ArrowUpAz,
 	ArrowUpDown,
-	Check,
 	Edit,
 	Loader2,
 	Plus,
@@ -175,9 +174,6 @@ export default function AdminPanel() {
 	const [originalScopeGroups, setOriginalScopeGroups] = useState<number[]>([]);
 	const [editScopeRelationOpen, setEditScopeRelationOpen] = useState(false);
 
-	// 编辑组弹窗标签页状态
-	const [editGroupTab, setEditGroupTab] = useState<"users" | "scopes">("users");
-
 	// 获取基础数据
 	const fetchBaseData = useCallback(async () => {
 		setLoading(true);
@@ -199,6 +195,27 @@ export default function AdminPanel() {
 			}
 		} finally {
 			setLoading(false);
+		}
+	}, [logout, navigate]);
+
+	// 静默刷新数据（不显示 loading）
+	const refreshData = useCallback(async () => {
+		try {
+			const [usersRes, groupsRes, scopesRes] = await Promise.all([
+				adminUserApi.listUsers({ all: true }),
+				adminGroupApi.listGroups({ all: true }),
+				adminScopeApi.listScopes({ all: true }),
+			]);
+			setUsers(usersRes.data.items);
+			setGroups(groupsRes.data.items);
+			setScopes(scopesRes.data.items);
+		} catch (error: unknown) {
+			if (error instanceof AxiosError && error.response?.status === 401) {
+				await logout();
+				navigate("/login");
+			} else {
+				handleApiError(error, "刷新数据失败");
+			}
 		}
 	}, [logout, navigate]);
 
@@ -478,7 +495,7 @@ export default function AdminPanel() {
 			setNewUserEmail("");
 			setNewUserUsername("");
 			setNewUserPassword("");
-			fetchBaseData();
+			refreshData();
 		} catch (error: unknown) {
 			handleApiError(error, "创建失败");
 		} finally {
@@ -546,7 +563,7 @@ export default function AdminPanel() {
 			}
 			toast.success("用户更新成功");
 			setEditUserOpen(false);
-			fetchBaseData();
+			refreshData();
 			if (filter.userId === editUserId) {
 				fetchDetail();
 			}
@@ -566,7 +583,7 @@ export default function AdminPanel() {
 			if (filter.userId === id) {
 				setFilter((f) => ({ ...f, userId: null }));
 			}
-			fetchBaseData();
+			refreshData();
 		} catch (error: unknown) {
 			handleApiError(error, "删除失败");
 		}
@@ -588,7 +605,7 @@ export default function AdminPanel() {
 			toast.success("组创建成功");
 			setCreateGroupOpen(false);
 			setNewGroupName("");
-			fetchBaseData();
+			refreshData();
 		} catch (error: unknown) {
 			handleApiError(error, "创建失败");
 		} finally {
@@ -684,7 +701,7 @@ export default function AdminPanel() {
 			}
 			toast.success("组更新成功");
 			setEditGroupOpen(false);
-			fetchBaseData();
+			refreshData();
 			if (filter.groupId === editGroupId) {
 				fetchDetail();
 			}
@@ -704,7 +721,7 @@ export default function AdminPanel() {
 			if (filter.groupId === id) {
 				setFilter((f) => ({ ...f, groupId: null }));
 			}
-			fetchBaseData();
+			refreshData();
 		} catch (error: unknown) {
 			handleApiError(error, "删除失败");
 		}
@@ -730,7 +747,7 @@ export default function AdminPanel() {
 			setCreateScopeOpen(false);
 			setNewScopeName("");
 			setNewScopeDesc("");
-			fetchBaseData();
+			refreshData();
 		} catch (error: unknown) {
 			handleApiError(error, "创建失败");
 		} finally {
@@ -796,7 +813,7 @@ export default function AdminPanel() {
 			}
 			toast.success("权限更新成功");
 			setEditScopeOpen(false);
-			fetchBaseData();
+			refreshData();
 			if (filter.scopeId === editScopeId) {
 				fetchDetail();
 			}
@@ -816,7 +833,7 @@ export default function AdminPanel() {
 			if (filter.scopeId === id) {
 				setFilter((f) => ({ ...f, scopeId: null }));
 			}
-			fetchBaseData();
+			refreshData();
 		} catch (error: unknown) {
 			handleApiError(error, "删除失败");
 		}
@@ -1333,7 +1350,7 @@ export default function AdminPanel() {
 									onClick={() => setEditUserRelationOpen(true)}
 									className="w-full bg-white border-stone-300/60 rounded-xl relative"
 								>
-									编辑关联关系
+									编辑用户-组关联
 									{(() => {
 										const current = [...editUserGroups].sort((a, b) => a - b);
 										const original = [...originalUserGroups].sort(
@@ -1444,7 +1461,7 @@ export default function AdminPanel() {
 									}}
 									className="w-full bg-white border-stone-300/60 rounded-xl relative"
 								>
-									编辑成员用户关联
+									编辑组-用户关联
 									{(() => {
 										const current = [...editGroupUsers].sort((a, b) => a - b);
 										const original = [...originalGroupUsers].sort(
@@ -1467,7 +1484,7 @@ export default function AdminPanel() {
 									}}
 									className="w-full bg-white border-stone-300/60 rounded-xl relative"
 								>
-									编辑包含权限关联
+									编辑组-权限关联
 									{(() => {
 										const current = [...editGroupScopes].sort((a, b) => a - b);
 										const original = [...originalGroupScopes].sort(
@@ -1591,7 +1608,7 @@ export default function AdminPanel() {
 									onClick={() => setEditScopeRelationOpen(true)}
 									className="w-full bg-white border-stone-300/60 rounded-xl relative"
 								>
-									编辑关联关系
+									编辑权限-组关联
 									{(() => {
 										const current = [...editScopeGroups].sort((a, b) => a - b);
 										const original = [...originalScopeGroups].sort(
@@ -1638,8 +1655,8 @@ export default function AdminPanel() {
 					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-6xl w-[90vw]">
 						<DialogHeader>
 							<DialogTitle className="text-stone-700">
-								编辑用户-组关联关系
-							</DialogTitle>
+								{`编辑 用户(${editUserUsernameVal})-组 关联`}
+							</DialogTitle>{" "}
 						</DialogHeader>
 						<RelationEditor
 							title="组"
@@ -1680,9 +1697,9 @@ export default function AdminPanel() {
 						<DialogHeader>
 							<DialogTitle className="text-stone-700">
 								{editGroupRelationTab === "users"
-									? "编辑组-用户关联关系"
-									: "编辑组-权限关联关系"}
-							</DialogTitle>
+									? `编辑 组(${editGroupNameVal})-用户 关联`
+									: `编辑 组(${editGroupNameVal})-权限 关联`}
+							</DialogTitle>{" "}
 						</DialogHeader>
 						{editGroupRelationTab === "users" ? (
 							<RelationEditor
@@ -1735,7 +1752,7 @@ export default function AdminPanel() {
 					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-6xl w-[90vw]">
 						<DialogHeader>
 							<DialogTitle className="text-stone-700">
-								编辑权限-组关联关系
+								{`编辑 权限(${editScopeNameVal})-组 关联`}
 							</DialogTitle>
 						</DialogHeader>
 						<RelationEditor

@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 import sqlalchemy.exc
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.config import CFG
@@ -144,6 +146,16 @@ async def health():
 
 # 添加路由
 app.include_router(api.router)
+
+# 挂载前端静态文件
+app.mount("/assets", StaticFiles(directory="app/static/dist/assets"), name="assets")
+
+
+# SPA 前端路由 - 所有未匹配的路由返回 index.html
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    return FileResponse("app/static/dist/index.html")
+
 
 if __name__ == "__main__":
     import uvicorn
