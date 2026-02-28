@@ -103,11 +103,15 @@ async def api_remove_scope(
 async def api_list_scopes(
     db_session: Annotated[AsyncSession, Depends(db.get_auth_db)],
     offset: int = Query(default=0, ge=0, description="偏移量"),
-    limit: int = Query(default=20, ge=1, le=100, description="每页数量"),
+    limit: int = Query(default=20, ge=1, le=1000, description="每页数量"),
     keyword: str | None = Query(default=None, description="搜索关键字"),
+    all: bool = Query(default=False, description="是否查询全部数据"),
 ) -> admin_schema.ScopeListResponse:
-    """查询所有权限（支持分页和搜索）"""
-    scopes, total = await scope_repo.ls(db_session, offset, limit, keyword)
+    """获取权限列表（支持分页、搜索和全量查询）
+
+    支持通过关键字搜索权限名和描述，可通过 all 参数或 keyword 参数获取全部匹配数据。
+    """
+    scopes, total = await scope_repo.ls(db_session, offset, limit, keyword, all)
     return admin_schema.ScopeListResponse(
         total=total,
         items=[admin_schema.ScopeInfo.from_scope(scope) for scope in scopes],

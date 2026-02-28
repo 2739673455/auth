@@ -202,30 +202,47 @@ async def remove(db_session: AsyncSession, group_id: int) -> None:
 
 
 async def ls(
-    db_session: AsyncSession, offset: int, limit: int, keyword: str | None = None
+    db_session: AsyncSession,
+    offset: int,
+    limit: int,
+    keyword: str | None = None,
+    all: bool = False,
 ) -> tuple[list[Group], int]:
-    """获取组列表
+    """获取组列表（支持分页和搜索）
+
+    Args:
+        db_session: 数据库会话
+        offset: 分页偏移量
+        limit: 每页返回数量
+        keyword: 搜索关键字，会匹配组名，为 None 则不搜索
+        all: 是否查询全部数据，为 True 或提供 keyword 时忽略分页参数
 
     Returns:
-        (组列表, 总数)
+        (组列表, 总数) 的元组
     """
     # 构建基础查询
     base_stmt = select(Group)
-    count_stmt = select(func.count()).select_from(Group)
 
     # 添加搜索条件
     if keyword:
         filter_cond = Group.name.contains(keyword)
         base_stmt = base_stmt.where(filter_cond)
-        count_stmt = count_stmt.where(filter_cond)
 
     # 执行查询
-    stmt = base_stmt.offset(offset).limit(limit).order_by(Group.id.desc())
-    result = await db_session.execute(stmt)
-    groups = result.scalars().all()
+    if keyword or all:
+        # 搜索时或查询全部数据时，不进行分页
+        stmt = base_stmt.order_by(Group.id.desc())
+        result = await db_session.execute(stmt)
+        groups = result.scalars().all()
+        return list(groups), len(groups)
+    else:
+        # 分页时需要查询总数
+        count_stmt = select(func.count()).select_from(Group)
+        count_result = await db_session.execute(count_stmt)
+        total = count_result.scalar() or 0
 
-    # 获取总数
-    total_result = await db_session.execute(count_stmt)
-    total = total_result.scalar() or 0
+        stmt = base_stmt.offset(offset).limit(limit).order_by(Group.id.desc())
+        result = await db_session.execute(stmt)
+        groups = result.scalars().all()
 
-    return list(groups), total
+        return list(groups), total

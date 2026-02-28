@@ -191,7 +191,7 @@ async def ls(
     limit: int,
     keyword: str | None = None,
     all: bool = False,
-) -> list[User] | tuple[list[User], int]:
+) -> tuple[list[User], int]:
     """获取用户列表（支持分页和搜索）
 
     Args:
@@ -199,10 +199,10 @@ async def ls(
         offset: 分页偏移量
         limit: 每页返回数量
         keyword: 搜索关键字，会匹配用户名和邮箱，为 None 则不搜索
-        all: 是否查询全部数据，为 True 时忽略分页参数
+        all: 是否查询全部数据，为 True 或提供 keyword 时忽略分页参数
 
     Returns:
-        分页时返回 (用户列表, 总数)，不分页时返回用户列表
+        (用户列表, 总数) 的元组
     """
     # 构建基础查询
     base_stmt = select(User)
@@ -218,7 +218,7 @@ async def ls(
         stmt = base_stmt.order_by(User.id.desc())
         result = await db_session.execute(stmt)
         users = result.scalars().all()
-        return list(users)
+        return list(users), len(users)
     else:
         # 分页时需要查询总数
         count_stmt = select(func.count()).select_from(User)

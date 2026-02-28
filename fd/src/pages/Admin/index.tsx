@@ -56,6 +56,7 @@ import type {
 	UserDetailResponse,
 	UserInfo,
 } from "../../types";
+import { RelationEditor } from "./components/RelationEditor";
 
 type SortField = "id" | "username" | "email" | "name";
 type SortOrder = "asc" | "desc";
@@ -138,6 +139,8 @@ export default function AdminPanel() {
 	const [editUserYn, setEditUserYn] = useState(1);
 	const [editUserLoading, setEditUserLoading] = useState(false);
 	const [editUserGroups, setEditUserGroups] = useState<number[]>([]);
+	const [originalUserGroups, setOriginalUserGroups] = useState<number[]>([]);
+	const [editUserRelationOpen, setEditUserRelationOpen] = useState(false);
 
 	// 表单状态 - 创建组
 	const [newGroupName, setNewGroupName] = useState("");
@@ -149,7 +152,13 @@ export default function AdminPanel() {
 	const [editGroupYn, setEditGroupYn] = useState(1);
 	const [editGroupLoading, setEditGroupLoading] = useState(false);
 	const [editGroupUsers, setEditGroupUsers] = useState<number[]>([]);
+	const [originalGroupUsers, setOriginalGroupUsers] = useState<number[]>([]);
 	const [editGroupScopes, setEditGroupScopes] = useState<number[]>([]);
+	const [originalGroupScopes, setOriginalGroupScopes] = useState<number[]>([]);
+	const [editGroupRelationOpen, setEditGroupRelationOpen] = useState(false);
+	const [editGroupRelationTab, setEditGroupRelationTab] = useState<
+		"users" | "scopes"
+	>("users");
 
 	// 表单状态 - 创建权限
 	const [newScopeName, setNewScopeName] = useState("");
@@ -163,6 +172,8 @@ export default function AdminPanel() {
 	const [editScopeYn, setEditScopeYn] = useState(1);
 	const [editScopeLoading, setEditScopeLoading] = useState(false);
 	const [editScopeGroups, setEditScopeGroups] = useState<number[]>([]);
+	const [originalScopeGroups, setOriginalScopeGroups] = useState<number[]>([]);
+	const [editScopeRelationOpen, setEditScopeRelationOpen] = useState(false);
 
 	// 编辑组弹窗标签页状态
 	const [editGroupTab, setEditGroupTab] = useState<"users" | "scopes">("users");
@@ -172,9 +183,9 @@ export default function AdminPanel() {
 		setLoading(true);
 		try {
 			const [usersRes, groupsRes, scopesRes] = await Promise.all([
-				adminUserApi.listUsers({}),
-				adminGroupApi.listGroups({}),
-				adminScopeApi.listScopes({}),
+				adminUserApi.listUsers({ all: true }),
+				adminGroupApi.listGroups({ all: true }),
+				adminScopeApi.listScopes({ all: true }),
 			]);
 			setUsers(usersRes.data.items);
 			setGroups(groupsRes.data.items);
@@ -484,9 +495,12 @@ export default function AdminPanel() {
 		setEditUserYn(user.yn);
 		try {
 			const res = await adminUserApi.getUser(user.id);
-			setEditUserGroups(res.data.groups.map((g) => g.id));
+			const groupIds = res.data.groups.map((g) => g.id);
+			setEditUserGroups(groupIds);
+			setOriginalUserGroups(groupIds);
 		} catch {
 			setEditUserGroups([]);
+			setOriginalUserGroups([]);
 		}
 		setEditUserOpen(true);
 	};
@@ -589,11 +603,17 @@ export default function AdminPanel() {
 		setEditGroupYn(group.yn);
 		try {
 			const res = await adminGroupApi.getGroup(group.id);
-			setEditGroupUsers(res.data.users.map((u) => u.id));
-			setEditGroupScopes(res.data.scopes.map((s) => s.id));
+			const userIds = res.data.users.map((u) => u.id);
+			const scopeIds = res.data.scopes.map((s) => s.id);
+			setEditGroupUsers(userIds);
+			setOriginalGroupUsers(userIds);
+			setEditGroupScopes(scopeIds);
+			setOriginalGroupScopes(scopeIds);
 		} catch {
 			setEditGroupUsers([]);
+			setOriginalGroupUsers([]);
 			setEditGroupScopes([]);
+			setOriginalGroupScopes([]);
 		}
 		setEditGroupOpen(true);
 	};
@@ -726,9 +746,12 @@ export default function AdminPanel() {
 		setEditScopeYn(scope.yn);
 		try {
 			const res = await adminScopeApi.getScope(scope.id);
-			setEditScopeGroups(res.data.groups.map((g) => g.id));
+			const groupIds = res.data.groups.map((g) => g.id);
+			setEditScopeGroups(groupIds);
+			setOriginalScopeGroups(groupIds);
 		} catch {
 			setEditScopeGroups([]);
+			setOriginalScopeGroups([]);
 		}
 		setEditScopeOpen(true);
 	};
@@ -886,45 +909,6 @@ export default function AdminPanel() {
 		</button>
 	);
 
-	// 渲染关联选择器
-	const renderRelationSelector = (
-		label: string,
-		items: { id: number; name: string }[],
-		selected: number[],
-		onChange: (selected: number[]) => void,
-	) => (
-		<div className="space-y-2">
-			<Label className="text-stone-600">{label}</Label>
-			<div className="max-h-32 overflow-y-auto space-y-1 rounded-xl bg-[#f0ece6] p-2">
-				{items.length === 0 ? (
-					<p className="text-sm text-stone-400 text-center py-2">暂无数据</p>
-				) : (
-					items.map((item) => (
-						<button
-							type="button"
-							key={item.id}
-							onClick={() => {
-								if (selected.includes(item.id)) {
-									onChange(selected.filter((id) => id !== item.id));
-								} else {
-									onChange([...selected, item.id]);
-								}
-							}}
-							className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors w-full text-left ${
-								selected.includes(item.id)
-									? "bg-stone-600 text-white"
-									: "hover:bg-stone-200/50"
-							}`}
-						>
-							<span className="text-sm">{item.name}</span>
-							{selected.includes(item.id) && <Check className="h-4 w-4" />}
-						</button>
-					))
-				)}
-			</div>
-		</div>
-	);
-
 	if (loading) {
 		return (
 			<div className="min-h-screen flex items-center justify-center bg-[#e8e4df]">
@@ -934,657 +918,856 @@ export default function AdminPanel() {
 	}
 
 	return (
-		<div className="min-h-screen flex bg-[#e8e4df]">
-			{/* 主内容 */}
-			<main className="flex-1 p-6 overflow-hidden">
-				<div className="grid grid-cols-3 gap-6 h-full">
-					{/* 用户栏 */}
-					<div className="bg-[#f0ece6] rounded-2xl border border-stone-300/60 flex flex-col">
-						<div className="p-4 border-b border-stone-300/60">
-							<div className="flex items-center justify-between mb-3">
-								<div className="flex items-center gap-2">
-									<User className="h-5 w-5 text-stone-600" />
-									<span className="font-semibold text-stone-700">用户</span>
-									{filter.userId && (
-										<Badge className="bg-amber-500 text-white text-xs">
-											筛选中
-										</Badge>
-									)}
-								</div>
-								<Button
-									size="sm"
-									onClick={() => setCreateUserOpen(true)}
-									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
-								>
-									<Plus className="h-4 w-4" />
-								</Button>
-							</div>
-							<div className="mb-3 relative">
-								<Input
-									placeholder="搜索用户名或邮箱"
-									value={userSearch}
-									onChange={(e) => setUserSearch(e.target.value)}
-									className="bg-white border-stone-300/60 rounded-xl text-sm h-8 pr-8"
-								/>
-								{userSearch && (
-									<button
-										type="button"
-										onClick={() => setUserSearch("")}
-										className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
-									>
-										<X className="h-4 w-4" />
-									</button>
+		<div className="h-screen bg-[#e8e4df] p-6 overflow-hidden">
+			<div className="grid grid-cols-3 gap-6 h-full min-h-0">
+				{/* 用户栏 */}
+				<div className="bg-[#f0ece6] rounded-2xl border border-stone-300/60 flex flex-col overflow-hidden">
+					<div className="p-4 border-b border-stone-300/60">
+						<div className="flex items-center justify-between mb-3">
+							<div className="flex items-center gap-2">
+								<User className="h-5 w-5 text-stone-600" />
+								<span className="font-semibold text-stone-700">用户</span>
+								{filter.userId && (
+									<Badge className="bg-amber-500 text-white text-xs">
+										筛选中
+									</Badge>
 								)}
 							</div>
-							<div className="flex gap-1">
-								{renderSortButton(
-									"id",
-									userSort,
-									() => toggleUserSort("id"),
-									"ID",
-								)}
-								{renderSortButton(
-									"username",
-									userSort,
-									() => toggleUserSort("username"),
-									"用户名",
-								)}
-								{renderSortButton(
-									"email",
-									userSort,
-									() => toggleUserSort("email"),
-									"邮箱",
-								)}
-							</div>
+							<Button
+								size="sm"
+								onClick={() => setCreateUserOpen(true)}
+								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+							>
+								<Plus className="h-4 w-4" />
+							</Button>
 						</div>
-						<div className="flex-1 overflow-y-auto p-2 space-y-1">
-							{sortedUsers.length === 0 ? (
-								<div className="flex flex-col items-center justify-center py-8 text-stone-400">
-									<AlertCircle className="h-8 w-8 mb-2" />
-									<span>空</span>
-								</div>
-							) : (
-								sortedUsers.map((user) =>
-									renderListItem(
-										<div className="flex-1 min-w-0">
-											<div className="flex items-center gap-2">
-												<span className="text-xs opacity-60">#{user.id}</span>
-												<span className="font-medium truncate">
-													{user.username}
-												</span>
-											</div>
-											<div className="text-xs opacity-60 truncate">
-												{user.email}
-											</div>
-										</div>,
-										filter.userId === user.id,
-										user.yn === 0,
-										() => openEditUser(user),
-										() => handleDeleteUser(user.id),
-										() => handleUserClick(user),
-									),
-								)
+						<div className="mb-3 relative">
+							<Input
+								placeholder="搜索用户名或邮箱"
+								value={userSearch}
+								onChange={(e) => setUserSearch(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl text-sm h-8 pr-8"
+							/>
+							{userSearch && (
+								<button
+									type="button"
+									onClick={() => setUserSearch("")}
+									className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+								>
+									<X className="h-4 w-4" />
+								</button>
+							)}
+						</div>
+						<div className="flex gap-1">
+							{renderSortButton(
+								"id",
+								userSort,
+								() => toggleUserSort("id"),
+								"ID",
+							)}
+							{renderSortButton(
+								"username",
+								userSort,
+								() => toggleUserSort("username"),
+								"用户名",
+							)}
+							{renderSortButton(
+								"email",
+								userSort,
+								() => toggleUserSort("email"),
+								"邮箱",
 							)}
 						</div>
 					</div>
-
-					{/* 组栏 */}
-					<div className="bg-[#f0ece6] rounded-2xl border border-stone-300/60 flex flex-col">
-						<div className="p-4 border-b border-stone-300/60">
-							<div className="flex items-center justify-between mb-3">
-								<div className="flex items-center gap-2">
-									<Users className="h-5 w-5 text-stone-600" />
-									<span className="font-semibold text-stone-700">组</span>
-									{filter.groupId && (
-										<Badge className="bg-amber-500 text-white text-xs">
-											筛选中
-										</Badge>
-									)}
-								</div>
-								<Button
-									size="sm"
-									onClick={() => setCreateGroupOpen(true)}
-									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
-								>
-									<Plus className="h-4 w-4" />
-								</Button>
-							</div>
-							<div className="mb-3 relative">
-								<Input
-									placeholder="搜索组名"
-									value={groupSearch}
-									onChange={(e) => setGroupSearch(e.target.value)}
-									className="bg-white border-stone-300/60 rounded-xl text-sm h-8 pr-8"
-								/>
-								{groupSearch && (
-									<button
-										type="button"
-										onClick={() => setGroupSearch("")}
-										className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
-									>
-										<X className="h-4 w-4" />
-									</button>
-								)}
-							</div>
-							<div className="flex gap-1">
-								{renderSortButton(
-									"id",
-									groupSort,
-									() => toggleGroupSort("id"),
-									"ID",
-								)}
-								{renderSortButton(
-									"name",
-									groupSort,
-									() => toggleGroupSort("name"),
-									"名称",
-								)}
-							</div>
-						</div>
-						<div className="flex-1 overflow-y-auto p-2 space-y-1">
-							{sortedGroups.length === 0 ? (
-								<div className="flex flex-col items-center justify-center py-8 text-stone-400">
-									<AlertCircle className="h-8 w-8 mb-2" />
-									<span>空</span>
-								</div>
-							) : (
-								sortedGroups.map((group) =>
-									renderListItem(
-										<div className="flex items-center gap-2">
-											<span className="text-xs opacity-60">#{group.id}</span>
-											<span className="font-medium">{group.name}</span>
-										</div>,
-										filter.groupId === group.id,
-										group.yn === 0,
-										() => openEditGroup(group),
-										() => handleDeleteGroup(group.id),
-										() => handleGroupClick(group),
-									),
-								)
-							)}
-						</div>
-					</div>
-
-					{/* 权限栏 */}
-					<div className="bg-[#f0ece6] rounded-2xl border border-stone-300/60 flex flex-col">
-						<div className="p-4 border-b border-stone-300/60">
-							<div className="flex items-center justify-between mb-3">
-								<div className="flex items-center gap-2">
-									<Shield className="h-5 w-5 text-stone-600" />
-									<span className="font-semibold text-stone-700">权限</span>
-									{filter.scopeId && (
-										<Badge className="bg-amber-500 text-white text-xs">
-											筛选中
-										</Badge>
-									)}
-								</div>
-								<Button
-									size="sm"
-									onClick={() => setCreateScopeOpen(true)}
-									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
-								>
-									<Plus className="h-4 w-4" />
-								</Button>
-							</div>
-							<div className="mb-3 relative">
-								<Input
-									placeholder="搜索权限名或描述"
-									value={scopeSearch}
-									onChange={(e) => setScopeSearch(e.target.value)}
-									className="bg-white border-stone-300/60 rounded-xl text-sm h-8 pr-8"
-								/>
-								{scopeSearch && (
-									<button
-										type="button"
-										onClick={() => setScopeSearch("")}
-										className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
-									>
-										<X className="h-4 w-4" />
-									</button>
-								)}
-							</div>
-							<div className="flex gap-1">
-								{renderSortButton(
-									"id",
-									scopeSort,
-									() => toggleScopeSort("id"),
-									"ID",
-								)}
-								{renderSortButton(
-									"name",
-									scopeSort,
-									() => toggleScopeSort("name"),
-									"名称",
-								)}
-							</div>
-						</div>
-						<div className="flex-1 overflow-y-auto p-2 space-y-1">
-							{sortedScopes.length === 0 ? (
-								<div className="flex flex-col items-center justify-center py-8 text-stone-400">
-									<AlertCircle className="h-8 w-8 mb-2" />
-									<span>空</span>
-								</div>
-							) : (
-								sortedScopes.map((scope) =>
-									renderListItem(
-										<div className="flex-1 min-w-0">
-											<div className="flex items-center gap-2">
-												<span className="text-xs opacity-60">#{scope.id}</span>
-												<span className="font-medium truncate">
-													{scope.name}
-												</span>
-											</div>
-											{scope.description && (
-												<div className="text-xs opacity-60 truncate">
-													{scope.description}
-												</div>
-											)}
-										</div>,
-										filter.scopeId === scope.id,
-										scope.yn === 0,
-										() => openEditScope(scope),
-										() => handleDeleteScope(scope.id),
-										() => handleScopeClick(scope),
-									),
-								)
-							)}
-						</div>
-					</div>
-				</div>
-			</main>
-
-			{/* 筛选状态栏 */}
-			{(filter.userId || filter.groupId || filter.scopeId) && (
-				<div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[#f0ece6] border border-stone-300/60 rounded-full px-4 py-2 shadow-lg flex items-center gap-2">
-					<span className="text-sm text-stone-500">当前筛选:</span>
-					{filter.userId && (
-						<Badge className="bg-stone-600 text-white">
-							用户: {users.find((u) => u.id === filter.userId)?.username}
-						</Badge>
-					)}
-					{filter.groupId && (
-						<Badge className="bg-stone-600 text-white">
-							组: {groups.find((g) => g.id === filter.groupId)?.name}
-						</Badge>
-					)}
-					{filter.scopeId && (
-						<Badge className="bg-stone-600 text-white">
-							权限: {scopes.find((s) => s.id === filter.scopeId)?.name}
-						</Badge>
-					)}
-					<Button
-						variant="ghost"
-						size="sm"
-						onClick={clearFilter}
-						className="rounded-full"
+					<div
+						className="overflow-y-auto p-2 space-y-1"
+						style={{ height: "calc(100% - 140px)" }}
 					>
-						<X className="h-4 w-4" />
-					</Button>
+						{sortedUsers.length === 0 ? (
+							<div className="flex flex-col items-center justify-center py-8 text-stone-400">
+								<AlertCircle className="h-8 w-8 mb-2" />
+								<span>空</span>
+							</div>
+						) : (
+							sortedUsers.map((user) =>
+								renderListItem(
+									<div className="flex-1 min-w-0">
+										<div className="flex items-center gap-2">
+											<span className="text-xs opacity-60">#{user.id}</span>
+											<span className="font-medium truncate">
+												{user.username}
+											</span>
+										</div>
+										<div className="text-xs opacity-60 truncate">
+											{user.email}
+										</div>
+									</div>,
+									filter.userId === user.id,
+									user.yn === 0,
+									() => openEditUser(user),
+									() => handleDeleteUser(user.id),
+									() => handleUserClick(user),
+								),
+							)
+						)}
+					</div>
 				</div>
-			)}
 
-			{/* 创建用户弹窗 */}
-			<Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
-				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl">
-					<DialogHeader>
-						<DialogTitle className="text-stone-700">新建用户</DialogTitle>
-					</DialogHeader>
-					<form onSubmit={handleCreateUser} className="space-y-4">
-						<div className="space-y-2">
-							<Label className="text-stone-600">邮箱</Label>
-							<Input
-								type="email"
-								value={newUserEmail}
-								onChange={(e) => setNewUserEmail(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-								required
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label className="text-stone-600">用户名</Label>
-							<Input
-								value={newUserUsername}
-								onChange={(e) => setNewUserUsername(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-								required
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label className="text-stone-600">密码</Label>
-							<Input
-								type="password"
-								value={newUserPassword}
-								onChange={(e) => setNewUserPassword(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-								required
-							/>
-						</div>
-						<DialogFooter>
+				{/* 组栏 */}
+				<div className="bg-[#f0ece6] rounded-2xl border border-stone-300/60 flex flex-col overflow-hidden">
+					<div className="p-4 border-b border-stone-300/60">
+						<div className="flex items-center justify-between mb-3">
+							<div className="flex items-center gap-2">
+								<Users className="h-5 w-5 text-stone-600" />
+								<span className="font-semibold text-stone-700">组</span>
+								{filter.groupId && (
+									<Badge className="bg-amber-500 text-white text-xs">
+										筛选中
+									</Badge>
+								)}
+							</div>
 							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setCreateUserOpen(false)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							>
-								取消
-							</Button>
-							<Button
-								type="submit"
-								disabled={createUserLoading}
+								size="sm"
+								onClick={() => setCreateGroupOpen(true)}
 								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
 							>
-								{createUserLoading && (
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-								)}
-								创建
+								<Plus className="h-4 w-4" />
 							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-
-			{/* 编辑用户弹窗 */}
-			<Dialog open={editUserOpen} onOpenChange={setEditUserOpen}>
-				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-md">
-					<DialogHeader>
-						<DialogTitle className="text-stone-700">编辑用户</DialogTitle>
-					</DialogHeader>
-					<form onSubmit={handleEditUser} className="space-y-4">
-						<div className="space-y-2">
-							<Label className="text-stone-600">用户名</Label>
+						</div>
+						<div className="mb-3 relative">
 							<Input
-								value={editUserUsernameVal}
-								onChange={(e) => setEditUserUsernameVal(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
+								placeholder="搜索组名"
+								value={groupSearch}
+								onChange={(e) => setGroupSearch(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl text-sm h-8 pr-8"
 							/>
+							{groupSearch && (
+								<button
+									type="button"
+									onClick={() => setGroupSearch("")}
+									className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+								>
+									<X className="h-4 w-4" />
+								</button>
+							)}
 						</div>
-						<div className="space-y-2">
-							<Label className="text-stone-600">邮箱</Label>
-							<Input
-								type="email"
-								value={editUserEmailVal}
-								onChange={(e) => setEditUserEmailVal(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							/>
+						<div className="flex gap-1">
+							{renderSortButton(
+								"id",
+								groupSort,
+								() => toggleGroupSort("id"),
+								"ID",
+							)}
+							{renderSortButton(
+								"name",
+								groupSort,
+								() => toggleGroupSort("name"),
+								"名称",
+							)}
 						</div>
-						<div className="space-y-2">
-							<Label className="text-stone-600">密码（留空不修改）</Label>
-							<Input
-								type="password"
-								value={editUserPasswordVal}
-								onChange={(e) => setEditUserPasswordVal(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-								placeholder="留空则不修改"
-							/>
-						</div>
-						<div className="flex items-center justify-between">
-							<Label className="text-stone-600">启用状态</Label>
-							<SwitchUI
-								checked={editUserYn === 1}
-								onCheckedChange={(checked) => setEditUserYn(checked ? 1 : 0)}
-							/>
-						</div>
-						{renderRelationSelector(
-							"所属组",
-							groups.map((g) => ({ id: g.id, name: g.name })),
-							editUserGroups,
-							setEditUserGroups,
+					</div>
+					<div
+						className="overflow-y-auto p-2 space-y-1"
+						style={{ height: "calc(100% - 140px)" }}
+					>
+						{sortedGroups.length === 0 ? (
+							<div className="flex flex-col items-center justify-center py-8 text-stone-400">
+								<AlertCircle className="h-8 w-8 mb-2" />
+								<span>空</span>
+							</div>
+						) : (
+							sortedGroups.map((group) =>
+								renderListItem(
+									<div className="flex items-center gap-2">
+										<span className="text-xs opacity-60">#{group.id}</span>
+										<span className="font-medium">{group.name}</span>
+									</div>,
+									filter.groupId === group.id,
+									group.yn === 0,
+									() => openEditGroup(group),
+									() => handleDeleteGroup(group.id),
+									() => handleGroupClick(group),
+								),
+							)
 						)}
-						<DialogFooter>
+					</div>
+				</div>
+
+				{/* 权限栏 */}
+				<div className="bg-[#f0ece6] rounded-2xl border border-stone-300/60 flex flex-col overflow-hidden">
+					<div className="p-4 border-b border-stone-300/60">
+						<div className="flex items-center justify-between mb-3">
+							<div className="flex items-center gap-2">
+								<Shield className="h-5 w-5 text-stone-600" />
+								<span className="font-semibold text-stone-700">权限</span>
+								{filter.scopeId && (
+									<Badge className="bg-amber-500 text-white text-xs">
+										筛选中
+									</Badge>
+								)}
+							</div>
 							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setEditUserOpen(false)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							>
-								取消
-							</Button>
-							<Button
-								type="submit"
-								disabled={editUserLoading}
+								size="sm"
+								onClick={() => setCreateScopeOpen(true)}
 								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
 							>
-								{editUserLoading && (
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-								)}
-								保存
+								<Plus className="h-4 w-4" />
 							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-
-			{/* 创建组弹窗 */}
-			<Dialog open={createGroupOpen} onOpenChange={setCreateGroupOpen}>
-				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl">
-					<DialogHeader>
-						<DialogTitle className="text-stone-700">新建组</DialogTitle>
-					</DialogHeader>
-					<form onSubmit={handleCreateGroup} className="space-y-4">
-						<div className="space-y-2">
-							<Label className="text-stone-600">组名</Label>
+						</div>
+						<div className="mb-3 relative">
 							<Input
-								value={newGroupName}
-								onChange={(e) => setNewGroupName(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-								required
+								placeholder="搜索权限名或描述"
+								value={scopeSearch}
+								onChange={(e) => setScopeSearch(e.target.value)}
+								className="bg-white border-stone-300/60 rounded-xl text-sm h-8 pr-8"
 							/>
+							{scopeSearch && (
+								<button
+									type="button"
+									onClick={() => setScopeSearch("")}
+									className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+								>
+									<X className="h-4 w-4" />
+								</button>
+							)}
 						</div>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setCreateGroupOpen(false)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							>
-								取消
-							</Button>
-							<Button
-								type="submit"
-								disabled={createGroupLoading}
-								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
-							>
-								{createGroupLoading && (
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-								)}
-								创建
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
+						<div className="flex gap-1">
+							{renderSortButton(
+								"id",
+								scopeSort,
+								() => toggleScopeSort("id"),
+								"ID",
+							)}
+							{renderSortButton(
+								"name",
+								scopeSort,
+								() => toggleScopeSort("name"),
+								"名称",
+							)}
+						</div>
+					</div>
+					<div
+						className="overflow-y-auto p-2 space-y-1"
+						style={{ height: "calc(100% - 140px)" }}
+					>
+						{sortedScopes.length === 0 ? (
+							<div className="flex flex-col items-center justify-center py-8 text-stone-400">
+								<AlertCircle className="h-8 w-8 mb-2" />
+								<span>空</span>
+							</div>
+						) : (
+							sortedScopes.map((scope) =>
+								renderListItem(
+									<div className="flex-1 min-w-0">
+										<div className="flex items-center gap-2">
+											<span className="text-xs opacity-60">#{scope.id}</span>
+											<span className="font-medium truncate">{scope.name}</span>
+										</div>
+										{scope.description && (
+											<div className="text-xs opacity-60 truncate">
+												{scope.description}
+											</div>
+										)}
+									</div>,
+									filter.scopeId === scope.id,
+									scope.yn === 0,
+									() => openEditScope(scope),
+									() => handleDeleteScope(scope.id),
+									() => handleScopeClick(scope),
+								),
+							)
+						)}
+					</div>
+				</div>
 
-			{/* 编辑组弹窗 */}
-			<Dialog open={editGroupOpen} onOpenChange={setEditGroupOpen}>
-				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-md">
-					<DialogHeader>
-						<DialogTitle className="text-stone-700">编辑组</DialogTitle>
-					</DialogHeader>
-					<form onSubmit={handleEditGroup} className="space-y-4">
-						<div className="space-y-2">
-							<Label className="text-stone-600">组名</Label>
-							<Input
-								value={editGroupNameVal}
-								onChange={(e) => setEditGroupNameVal(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							/>
-						</div>
-						<div className="flex items-center justify-between">
-							<Label className="text-stone-600">启用状态</Label>
-							<SwitchUI
-								checked={editGroupYn === 1}
-								onCheckedChange={(checked) => setEditGroupYn(checked ? 1 : 0)}
-							/>
-						</div>
-						{/* 标签页切换 */}
-						<div className="flex border-b border-stone-300/60">
+				{/* 筛选状态栏 */}
+				{(filter.userId || filter.groupId || filter.scopeId) && (
+					<div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[#f0ece6] border border-stone-300/60 rounded-full px-4 py-2 shadow-lg flex items-center gap-2">
+						<span className="text-sm text-stone-500">当前筛选:</span>
+						{filter.userId && (
 							<button
 								type="button"
-								onClick={() => setEditGroupTab("users")}
-								className={`px-3 py-2 text-sm rounded-t-xl ${
-									editGroupTab === "users"
-										? "bg-stone-600 text-white"
-										: "text-stone-600 hover:bg-stone-200/50"
-								}`}
+								onClick={() => setFilter((f) => ({ ...f, userId: null }))}
+								className="bg-stone-600 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1 hover:bg-stone-700 transition-colors"
 							>
-								成员用户
+								用户: {users.find((u) => u.id === filter.userId)?.username}
+								<X className="h-3 w-3" />
 							</button>
+						)}
+						{filter.groupId && (
 							<button
 								type="button"
-								onClick={() => setEditGroupTab("scopes")}
-								className={`px-3 py-2 text-sm rounded-t-xl ${
-									editGroupTab === "scopes"
-										? "bg-stone-600 text-white"
-										: "text-stone-600 hover:bg-stone-200/50"
-								}`}
+								onClick={() => setFilter((f) => ({ ...f, groupId: null }))}
+								className="bg-stone-600 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1 hover:bg-stone-700 transition-colors"
 							>
-								包含权限
+								组: {groups.find((g) => g.id === filter.groupId)?.name}
+								<X className="h-3 w-3" />
 							</button>
-						</div>
-						{editGroupTab === "users"
-							? renderRelationSelector(
-									"成员用户",
-									users.map((u) => ({ id: u.id, name: u.username })),
-									editGroupUsers,
-									setEditGroupUsers,
-								)
-							: renderRelationSelector(
-									"包含权限",
-									scopes.map((s) => ({ id: s.id, name: s.name })),
-									editGroupScopes,
-									setEditGroupScopes,
-								)}
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setEditGroupOpen(false)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							>
-								取消
-							</Button>
-							<Button
-								type="submit"
-								disabled={editGroupLoading}
-								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
-							>
-								{editGroupLoading && (
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-								)}
-								保存
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-
-			{/* 创建权限弹窗 */}
-			<Dialog open={createScopeOpen} onOpenChange={setCreateScopeOpen}>
-				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl">
-					<DialogHeader>
-						<DialogTitle className="text-stone-700">新建权限</DialogTitle>
-					</DialogHeader>
-					<form onSubmit={handleCreateScope} className="space-y-4">
-						<div className="space-y-2">
-							<Label className="text-stone-600">权限名</Label>
-							<Input
-								value={newScopeName}
-								onChange={(e) => setNewScopeName(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-								required
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label className="text-stone-600">描述</Label>
-							<Input
-								value={newScopeDesc}
-								onChange={(e) => setNewScopeDesc(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							/>
-						</div>
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setCreateScopeOpen(false)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							>
-								取消
-							</Button>
-							<Button
-								type="submit"
-								disabled={createScopeLoading}
-								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
-							>
-								{createScopeLoading && (
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-								)}
-								创建
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-
-			{/* 编辑权限弹窗 */}
-			<Dialog open={editScopeOpen} onOpenChange={setEditScopeOpen}>
-				<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-md">
-					<DialogHeader>
-						<DialogTitle className="text-stone-700">编辑权限</DialogTitle>
-					</DialogHeader>
-					<form onSubmit={handleEditScope} className="space-y-4">
-						<div className="space-y-2">
-							<Label className="text-stone-600">权限名</Label>
-							<Input
-								value={editScopeNameVal}
-								onChange={(e) => setEditScopeNameVal(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							/>
-						</div>
-						<div className="space-y-2">
-							<Label className="text-stone-600">描述</Label>
-							<Input
-								value={editScopeDescVal}
-								onChange={(e) => setEditScopeDescVal(e.target.value)}
-								className="bg-white border-stone-300/60 rounded-xl"
-							/>
-						</div>
-						<div className="flex items-center justify-between">
-							<Label className="text-stone-600">启用状态</Label>
-							<SwitchUI
-								checked={editScopeYn === 1}
-								onCheckedChange={(checked) => setEditScopeYn(checked ? 1 : 0)}
-							/>
-						</div>
-						{renderRelationSelector(
-							"所属组",
-							groups.map((g) => ({ id: g.id, name: g.name })),
-							editScopeGroups,
-							setEditScopeGroups,
 						)}
-						<DialogFooter>
+						{filter.scopeId && (
+							<button
+								type="button"
+								onClick={() => setFilter((f) => ({ ...f, scopeId: null }))}
+								className="bg-stone-600 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1 hover:bg-stone-700 transition-colors"
+							>
+								权限: {scopes.find((s) => s.id === filter.scopeId)?.name}
+								<X className="h-3 w-3" />
+							</button>
+						)}
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={clearFilter}
+							className="rounded-full"
+						>
+							<X className="h-4 w-4" />
+						</Button>
+					</div>
+				)}
+
+				{/* 创建用户弹窗 */}
+				<Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
+					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl">
+						<DialogHeader>
+							<DialogTitle className="text-stone-700">新建用户</DialogTitle>
+						</DialogHeader>
+						<form onSubmit={handleCreateUser} className="space-y-4">
+							<div className="space-y-2">
+								<Label className="text-stone-600">邮箱</Label>
+								<Input
+									type="email"
+									value={newUserEmail}
+									onChange={(e) => setNewUserEmail(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+									required
+								/>
+							</div>
+							<div className="space-y-2">
+								<Label className="text-stone-600">用户名</Label>
+								<Input
+									value={newUserUsername}
+									onChange={(e) => setNewUserUsername(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+									required
+								/>
+							</div>
+							<div className="space-y-2">
+								<Label className="text-stone-600">密码</Label>
+								<Input
+									type="password"
+									value={newUserPassword}
+									onChange={(e) => setNewUserPassword(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+									required
+								/>
+							</div>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setCreateUserOpen(false)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								>
+									取消
+								</Button>
+								<Button
+									type="submit"
+									disabled={createUserLoading}
+									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+								>
+									{createUserLoading && (
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									)}
+									创建
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+
+				{/* 编辑用户弹窗 */}
+				<Dialog open={editUserOpen} onOpenChange={setEditUserOpen}>
+					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-md">
+						<DialogHeader>
+							<DialogTitle className="text-stone-700">编辑用户</DialogTitle>
+						</DialogHeader>
+						<form onSubmit={handleEditUser} className="space-y-4">
+							<div className="space-y-2">
+								<Label className="text-stone-600">用户名</Label>
+								<Input
+									value={editUserUsernameVal}
+									onChange={(e) => setEditUserUsernameVal(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								/>
+							</div>
+							<div className="space-y-2">
+								<Label className="text-stone-600">邮箱</Label>
+								<Input
+									type="email"
+									value={editUserEmailVal}
+									onChange={(e) => setEditUserEmailVal(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								/>
+							</div>
+							<div className="space-y-2">
+								<Label className="text-stone-600">密码（留空不修改）</Label>
+								<Input
+									type="password"
+									value={editUserPasswordVal}
+									onChange={(e) => setEditUserPasswordVal(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+									placeholder="留空则不修改"
+								/>
+							</div>
+							<div className="flex items-center justify-between">
+								<Label className="text-stone-600">启用状态</Label>
+								<SwitchUI
+									checked={editUserYn === 1}
+									onCheckedChange={(checked) => setEditUserYn(checked ? 1 : 0)}
+								/>
+							</div>
+							<div className="pt-2 border-t border-stone-300/60">
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setEditUserRelationOpen(true)}
+									className="w-full bg-white border-stone-300/60 rounded-xl relative"
+								>
+									编辑关联关系
+									{(() => {
+										const current = [...editUserGroups].sort((a, b) => a - b);
+										const original = [...originalUserGroups].sort(
+											(a, b) => a - b,
+										);
+										const hasChanges =
+											current.length !== original.length ||
+											current.some((id, i) => id !== original[i]);
+										return hasChanges ? (
+											<span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+										) : null;
+									})()}
+								</Button>
+							</div>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setEditUserOpen(false)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								>
+									取消
+								</Button>
+								<Button
+									type="submit"
+									disabled={editUserLoading}
+									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+								>
+									{editUserLoading && (
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									)}
+									保存
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+
+				{/* 创建组弹窗 */}
+				<Dialog open={createGroupOpen} onOpenChange={setCreateGroupOpen}>
+					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl">
+						<DialogHeader>
+							<DialogTitle className="text-stone-700">新建组</DialogTitle>
+						</DialogHeader>
+						<form onSubmit={handleCreateGroup} className="space-y-4">
+							<div className="space-y-2">
+								<Label className="text-stone-600">组名</Label>
+								<Input
+									value={newGroupName}
+									onChange={(e) => setNewGroupName(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+									required
+								/>
+							</div>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setCreateGroupOpen(false)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								>
+									取消
+								</Button>
+								<Button
+									type="submit"
+									disabled={createGroupLoading}
+									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+								>
+									{createGroupLoading && (
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									)}
+									创建
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+
+				{/* 编辑组弹窗 */}
+				<Dialog open={editGroupOpen} onOpenChange={setEditGroupOpen}>
+					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-md">
+						<DialogHeader>
+							<DialogTitle className="text-stone-700">编辑组</DialogTitle>
+						</DialogHeader>
+						<form onSubmit={handleEditGroup} className="space-y-4">
+							<div className="space-y-2">
+								<Label className="text-stone-600">组名</Label>
+								<Input
+									value={editGroupNameVal}
+									onChange={(e) => setEditGroupNameVal(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								/>
+							</div>
+							<div className="flex items-center justify-between">
+								<Label className="text-stone-600">启用状态</Label>
+								<SwitchUI
+									checked={editGroupYn === 1}
+									onCheckedChange={(checked) => setEditGroupYn(checked ? 1 : 0)}
+								/>
+							</div>
+							<div className="pt-2 border-t border-stone-300/60 space-y-2">
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => {
+										setEditGroupRelationTab("users");
+										setEditGroupRelationOpen(true);
+									}}
+									className="w-full bg-white border-stone-300/60 rounded-xl relative"
+								>
+									编辑成员用户关联
+									{(() => {
+										const current = [...editGroupUsers].sort((a, b) => a - b);
+										const original = [...originalGroupUsers].sort(
+											(a, b) => a - b,
+										);
+										const hasChanges =
+											current.length !== original.length ||
+											current.some((id, i) => id !== original[i]);
+										return hasChanges ? (
+											<span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+										) : null;
+									})()}
+								</Button>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => {
+										setEditGroupRelationTab("scopes");
+										setEditGroupRelationOpen(true);
+									}}
+									className="w-full bg-white border-stone-300/60 rounded-xl relative"
+								>
+									编辑包含权限关联
+									{(() => {
+										const current = [...editGroupScopes].sort((a, b) => a - b);
+										const original = [...originalGroupScopes].sort(
+											(a, b) => a - b,
+										);
+										const hasChanges =
+											current.length !== original.length ||
+											current.some((id, i) => id !== original[i]);
+										return hasChanges ? (
+											<span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+										) : null;
+									})()}
+								</Button>
+							</div>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setEditGroupOpen(false)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								>
+									取消
+								</Button>
+								<Button
+									type="submit"
+									disabled={editGroupLoading}
+									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+								>
+									{editGroupLoading && (
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									)}
+									保存
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+
+				{/* 创建权限弹窗 */}
+				<Dialog open={createScopeOpen} onOpenChange={setCreateScopeOpen}>
+					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl">
+						<DialogHeader>
+							<DialogTitle className="text-stone-700">新建权限</DialogTitle>
+						</DialogHeader>
+						<form onSubmit={handleCreateScope} className="space-y-4">
+							<div className="space-y-2">
+								<Label className="text-stone-600">权限名</Label>
+								<Input
+									value={newScopeName}
+									onChange={(e) => setNewScopeName(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+									required
+								/>
+							</div>
+							<div className="space-y-2">
+								<Label className="text-stone-600">描述</Label>
+								<Input
+									value={newScopeDesc}
+									onChange={(e) => setNewScopeDesc(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								/>
+							</div>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setCreateScopeOpen(false)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								>
+									取消
+								</Button>
+								<Button
+									type="submit"
+									disabled={createScopeLoading}
+									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+								>
+									{createScopeLoading && (
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									)}
+									创建
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+
+				{/* 编辑权限弹窗 */}
+				<Dialog open={editScopeOpen} onOpenChange={setEditScopeOpen}>
+					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-md">
+						<DialogHeader>
+							<DialogTitle className="text-stone-700">编辑权限</DialogTitle>
+						</DialogHeader>
+						<form onSubmit={handleEditScope} className="space-y-4">
+							<div className="space-y-2">
+								<Label className="text-stone-600">权限名</Label>
+								<Input
+									value={editScopeNameVal}
+									onChange={(e) => setEditScopeNameVal(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								/>
+							</div>
+							<div className="space-y-2">
+								<Label className="text-stone-600">描述</Label>
+								<Input
+									value={editScopeDescVal}
+									onChange={(e) => setEditScopeDescVal(e.target.value)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								/>
+							</div>
+							<div className="flex items-center justify-between">
+								<Label className="text-stone-600">启用状态</Label>
+								<SwitchUI
+									checked={editScopeYn === 1}
+									onCheckedChange={(checked) => setEditScopeYn(checked ? 1 : 0)}
+								/>
+							</div>
+							<div className="pt-2 border-t border-stone-300/60">
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setEditScopeRelationOpen(true)}
+									className="w-full bg-white border-stone-300/60 rounded-xl relative"
+								>
+									编辑关联关系
+									{(() => {
+										const current = [...editScopeGroups].sort((a, b) => a - b);
+										const original = [...originalScopeGroups].sort(
+											(a, b) => a - b,
+										);
+										const hasChanges =
+											current.length !== original.length ||
+											current.some((id, i) => id !== original[i]);
+										return hasChanges ? (
+											<span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+										) : null;
+									})()}
+								</Button>
+							</div>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setEditScopeOpen(false)}
+									className="bg-white border-stone-300/60 rounded-xl"
+								>
+									取消
+								</Button>
+								<Button
+									type="submit"
+									disabled={editScopeLoading}
+									className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+								>
+									{editScopeLoading && (
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+									)}
+									保存
+								</Button>
+							</DialogFooter>
+						</form>
+					</DialogContent>
+				</Dialog>
+
+				{/* 用户关联关系编辑弹窗 */}
+				<Dialog
+					open={editUserRelationOpen}
+					onOpenChange={setEditUserRelationOpen}
+				>
+					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-6xl w-[90vw]">
+						<DialogHeader>
+							<DialogTitle className="text-stone-700">
+								编辑用户-组关联关系
+							</DialogTitle>
+						</DialogHeader>
+						<RelationEditor
+							title="组"
+							allItems={groups.map((g) => ({
+								id: g.id,
+								name: g.name,
+								description: undefined,
+							}))}
+							selectedIds={editUserGroups}
+							onChange={setEditUserGroups}
+						/>
+						<DialogFooter className="mt-4">
 							<Button
 								type="button"
 								variant="outline"
-								onClick={() => setEditScopeOpen(false)}
+								onClick={() => setEditUserRelationOpen(false)}
 								className="bg-white border-stone-300/60 rounded-xl"
 							>
 								取消
 							</Button>
 							<Button
-								type="submit"
-								disabled={editScopeLoading}
+								type="button"
+								onClick={() => setEditUserRelationOpen(false)}
 								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
 							>
-								{editScopeLoading && (
-									<Loader2 className="mr-2 h-4 w-4 animate-spin" />
-								)}
-								保存
+								确定
 							</Button>
 						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
+					</DialogContent>
+				</Dialog>
+
+				{/* 组关联关系编辑弹窗 */}
+				<Dialog
+					open={editGroupRelationOpen}
+					onOpenChange={setEditGroupRelationOpen}
+				>
+					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-6xl w-[90vw]">
+						<DialogHeader>
+							<DialogTitle className="text-stone-700">
+								{editGroupRelationTab === "users"
+									? "编辑组-用户关联关系"
+									: "编辑组-权限关联关系"}
+							</DialogTitle>
+						</DialogHeader>
+						{editGroupRelationTab === "users" ? (
+							<RelationEditor
+								title="用户"
+								allItems={users.map((u) => ({
+									id: u.id,
+									name: u.username,
+									description: u.email,
+								}))}
+								selectedIds={editGroupUsers}
+								onChange={setEditGroupUsers}
+							/>
+						) : (
+							<RelationEditor
+								title="权限"
+								allItems={scopes.map((s) => ({
+									id: s.id,
+									name: s.name,
+									description: s.description,
+								}))}
+								selectedIds={editGroupScopes}
+								onChange={setEditGroupScopes}
+							/>
+						)}
+						<DialogFooter className="mt-4">
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setEditGroupRelationOpen(false)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							>
+								取消
+							</Button>
+							<Button
+								type="button"
+								onClick={() => setEditGroupRelationOpen(false)}
+								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+							>
+								确定
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+
+				{/* 权限关联关系编辑弹窗 */}
+				<Dialog
+					open={editScopeRelationOpen}
+					onOpenChange={setEditScopeRelationOpen}
+				>
+					<DialogContent className="bg-[#f0ece6] border-stone-300/60 rounded-2xl max-w-6xl w-[90vw]">
+						<DialogHeader>
+							<DialogTitle className="text-stone-700">
+								编辑权限-组关联关系
+							</DialogTitle>
+						</DialogHeader>
+						<RelationEditor
+							title="组"
+							allItems={groups.map((g) => ({
+								id: g.id,
+								name: g.name,
+								description: undefined,
+							}))}
+							selectedIds={editScopeGroups}
+							onChange={setEditScopeGroups}
+						/>
+						<DialogFooter className="mt-4">
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => setEditScopeRelationOpen(false)}
+								className="bg-white border-stone-300/60 rounded-xl"
+							>
+								取消
+							</Button>
+							<Button
+								type="button"
+								onClick={() => setEditScopeRelationOpen(false)}
+								className="bg-stone-600 hover:bg-stone-700 rounded-xl"
+							>
+								确定
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+			</div>
 		</div>
 	);
 }
